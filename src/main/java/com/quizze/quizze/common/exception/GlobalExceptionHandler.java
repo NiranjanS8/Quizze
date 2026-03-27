@@ -1,12 +1,14 @@
 package com.quizze.quizze.common.exception;
 
 import com.quizze.quizze.common.api.ApiResponse;
+import jakarta.persistence.EntityExistsException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -50,6 +52,18 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest()
                 .body(ApiResponse.failure("Constraint violation", errors));
+    }
+
+    @ExceptionHandler(EntityExistsException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleEntityExists(EntityExistsException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.failure(ex.getMessage(), null));
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleBadCredentials(BadCredentialsException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.failure("Invalid username/email or password", null));
     }
 
     @ExceptionHandler(Exception.class)
