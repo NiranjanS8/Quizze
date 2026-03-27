@@ -2,6 +2,7 @@ package com.quizze.quizze.user.controller;
 
 import com.quizze.quizze.common.api.ApiResponse;
 import com.quizze.quizze.quiz.dto.user.AttemptHistoryResponse;
+import com.quizze.quizze.quiz.dto.user.QuizResultResponse;
 import com.quizze.quizze.quiz.service.UserQuizService;
 import com.quizze.quizze.security.user.CustomUserDetails;
 import com.quizze.quizze.user.dto.UserProfileResponse;
@@ -67,6 +68,26 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Attempt history fetched successfully",
                 userQuizService.getAttemptHistory(currentUser.getUser().getId())
+        ));
+    }
+
+    @GetMapping("/me/results")
+    @Operation(
+            summary = "Get current user result history",
+            description = "Returns submitted quiz results for the authenticated user with summary scoring information.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Result history fetched successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Missing or invalid JWT token"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    public ResponseEntity<ApiResponse<List<QuizResultResponse>>> getResultHistory(
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Result history fetched successfully",
+                userQuizService.getResultHistory(currentUser.getUser().getId())
         ));
     }
 }

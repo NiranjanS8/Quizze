@@ -3,6 +3,7 @@ package com.quizze.quizze.quiz.controller;
 import com.quizze.quizze.common.api.ApiResponse;
 import com.quizze.quizze.quiz.dto.user.AttemptQuestionResponse;
 import com.quizze.quizze.quiz.dto.user.QuizDetailResponse;
+import com.quizze.quizze.quiz.dto.user.QuizResultResponse;
 import com.quizze.quizze.quiz.dto.user.QuizSummaryResponse;
 import com.quizze.quizze.quiz.dto.user.StartQuizResponse;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizRequest;
@@ -131,5 +132,27 @@ public class UserQuizController {
     ) {
         SubmitQuizResponse response = userQuizService.submitQuiz(attemptId, currentUser.getUser().getId(), request);
         return ResponseEntity.ok(ApiResponse.success("Quiz submitted successfully", response));
+    }
+
+    @GetMapping("/attempts/{attemptId}/result")
+    @Operation(
+            summary = "Get attempt result summary",
+            description = "Returns the evaluated result summary for a submitted attempt, including score, percentage, and per-question outcomes.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Result fetched successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Result not yet available", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Missing or invalid JWT token", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Attempt not found", content = @Content)
+    })
+    public ResponseEntity<ApiResponse<QuizResultResponse>> getAttemptResult(
+            @PathVariable Long attemptId,
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Result fetched successfully",
+                userQuizService.getAttemptResult(attemptId, currentUser.getUser().getId())
+        ));
     }
 }
