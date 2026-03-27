@@ -1083,6 +1083,7 @@ function ResultDetailPage({ auth, setError }) {
 
 function AdminPage({ auth, setError, setMessage }) {
   const [quizzes, setQuizzes] = useState([]);
+  const [overview, setOverview] = useState(null);
   const [mode, setMode] = useState("create");
   const [activeQuiz, setActiveQuiz] = useState(null);
   const [selectedQuizId, setSelectedQuizId] = useState(null);
@@ -1092,10 +1093,14 @@ function AdminPage({ auth, setError, setMessage }) {
 
   async function loadQuizzes() {
     try {
-      const data = await apiRequest("/api/admin/quizzes", {}, auth.token);
-      setQuizzes(data);
-      if (!selectedQuizId && data.length) {
-        setSelectedQuizId(data[0].id);
+      const [quizData, overviewData] = await Promise.all([
+        apiRequest("/api/admin/quizzes", {}, auth.token),
+        apiRequest("/api/admin/analytics/overview", {}, auth.token),
+      ]);
+      setQuizzes(quizData);
+      setOverview(overviewData);
+      if (!selectedQuizId && quizData.length) {
+        setSelectedQuizId(quizData[0].id);
       }
       setError("");
     } catch (loadError) {
@@ -1182,21 +1187,67 @@ function AdminPage({ auth, setError, setMessage }) {
 
       <section className="metric-grid">
         <article className="stat-card">
-          <div className="stat-label">Published</div>
-          <div className="stat-value accent-primary">{quizzes.filter((quiz) => quiz.published).length}</div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-label">Drafts</div>
-          <div className="stat-value accent-secondary">{quizzes.filter((quiz) => !quiz.published).length}</div>
+          <div className="stat-label">Total Users</div>
+          <div className="stat-value accent-primary">{overview?.totalUsers ?? 0}</div>
         </article>
         <article className="stat-card">
           <div className="stat-label">Total Quizzes</div>
-          <div className="stat-value">{quizzes.length}</div>
+          <div className="stat-value">{overview?.totalQuizzes ?? quizzes.length}</div>
         </article>
         <article className="stat-card">
-          <div className="stat-label">Role</div>
-          <div className="stat-value admin-role-value">{auth.user?.role}</div>
+          <div className="stat-label">Published</div>
+          <div className="stat-value accent-success">{overview?.publishedQuizzes ?? quizzes.filter((quiz) => quiz.published).length}</div>
         </article>
+        <article className="stat-card">
+          <div className="stat-label">Total Attempts</div>
+          <div className="stat-value accent-secondary">{overview?.totalAttempts ?? 0}</div>
+        </article>
+      </section>
+
+      <section className="dashboard-grid">
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">Most Attempted Quizzes</h3>
+            <span className="muted tiny">{overview?.submittedAttempts ?? 0} submitted attempts total</span>
+          </div>
+          <div className="list">
+            {overview?.mostAttemptedQuizzes?.map((item) => (
+              <div className="list-item" key={`most-${item.quizId}`}>
+                <div className="helper-row">
+                  <div>
+                    <div className="list-title">{item.quizTitle}</div>
+                    <div className="muted tiny">{item.categoryName || "Uncategorized"}</div>
+                  </div>
+                  <div className="overview-emphasis">{item.attempts}</div>
+                </div>
+              </div>
+            ))}
+            {!overview?.mostAttemptedQuizzes?.length ? <div className="empty-state">No attempt data yet.</div> : null}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">Top Performing Quizzes</h3>
+            <span className="muted tiny">By average submitted score</span>
+          </div>
+          <div className="list">
+            {overview?.topPerformingQuizzes?.map((item) => (
+              <div className="list-item" key={`top-${item.quizId}`}>
+                <div className="helper-row">
+                  <div>
+                    <div className="list-title">{item.quizTitle}</div>
+                    <div className="muted tiny">
+                      {Math.round(item.averagePercentage || 0)}% avg | {item.attempts} attempts
+                    </div>
+                  </div>
+                  <div className="overview-emphasis">{Number(item.averageScore || 0).toFixed(1)}</div>
+                </div>
+              </div>
+            ))}
+            {!overview?.topPerformingQuizzes?.length ? <div className="empty-state">No submitted results yet.</div> : null}
+          </div>
+        </Card>
       </section>
 
       <section className="dashboard-grid admin-layout">

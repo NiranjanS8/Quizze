@@ -2,12 +2,14 @@ package com.quizze.quizze.admin.controller;
 
 import com.quizze.quizze.common.api.ApiResponse;
 import com.quizze.quizze.quiz.dto.analytics.QuizPerformanceAnalyticsResponse;
+import com.quizze.quizze.quiz.dto.analytics.AdminOverviewResponse;
 import com.quizze.quizze.quiz.dto.admin.QuestionRequest;
 import com.quizze.quizze.quiz.dto.admin.QuestionResponse;
 import com.quizze.quizze.quiz.dto.admin.QuizRequest;
 import com.quizze.quizze.quiz.dto.admin.QuizResponse;
 import com.quizze.quizze.quiz.dto.leaderboard.QuizLeaderboardResponse;
 import com.quizze.quizze.quiz.service.AdminQuizService;
+import com.quizze.quizze.quiz.service.AdminOverviewService;
 import com.quizze.quizze.quiz.service.QuizAnalyticsService;
 import com.quizze.quizze.quiz.service.QuizLeaderboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +41,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class AdminController {
 
     private final AdminQuizService adminQuizService;
+    private final AdminOverviewService adminOverviewService;
     private final QuizAnalyticsService quizAnalyticsService;
     private final QuizLeaderboardService quizLeaderboardService;
 
@@ -52,6 +55,19 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Admin access granted",
                 Map.of("status", "You are authorized as ADMIN")
+        ));
+    }
+
+    @GetMapping("/analytics/overview")
+    @Operation(
+            summary = "Get admin overview analytics",
+            description = "Returns platform-wide admin dashboard metrics including users, quizzes, attempts, most attempted quizzes, and top performing quizzes.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<AdminOverviewResponse>> getOverviewAnalytics() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Admin overview analytics fetched successfully",
+                adminOverviewService.getOverview()
         ));
     }
 

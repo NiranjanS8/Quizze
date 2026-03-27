@@ -903,6 +903,12 @@ tbody tr {
   margin-top: 14px;
 }
 
+.overview-emphasis {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--success);
+}
+
 @media (max-width: 1080px) {
   .auth-wrap,
   .dashboard-grid,
