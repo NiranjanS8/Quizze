@@ -8,8 +8,11 @@ import com.quizze.quizze.quiz.dto.leaderboard.QuizLeaderboardEntryResponse;
 import com.quizze.quizze.quiz.dto.leaderboard.QuizLeaderboardResponse;
 import com.quizze.quizze.quiz.repository.QuizAttemptRepository;
 import com.quizze.quizze.quiz.repository.QuizRepository;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,26 +29,32 @@ public class QuizLeaderboardService {
         Quiz quiz = requirePublished ? getPublishedQuiz(quizId) : getQuiz(quizId);
         int normalizedLimit = Math.min(Math.max(limit, 1), 50);
 
-        List<QuizAttempt> submittedAttempts = quizAttemptRepository.findByQuizIdAndStatus(quizId, AttemptStatus.SUBMITTED)
+        List<QuizAttempt> rankedAttempts = quizAttemptRepository.findByQuizIdAndStatus(quizId, AttemptStatus.SUBMITTED)
                 .stream()
-                .sorted(Comparator.comparing(QuizAttempt::getScore, Comparator.reverseOrder())
-                        .thenComparing(QuizAttempt::getSubmittedAt, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(QuizAttempt::getId))
+                .collect(java.util.stream.Collectors.toMap(
+                        attempt -> attempt.getUser().getId(),
+                        attempt -> attempt,
+                        this::pickBetterAttempt,
+                        LinkedHashMap::new
+                ))
+                .values()
+                .stream()
+                .sorted(leaderboardComparator())
                 .toList();
 
         double maxScore = quiz.getQuestions().stream()
                 .mapToInt(question -> question.getPoints())
                 .sum();
 
-        List<QuizLeaderboardEntryResponse> entries = submittedAttempts.stream()
+        List<QuizLeaderboardEntryResponse> entries = rankedAttempts.stream()
                 .limit(normalizedLimit)
-                .map(attempt -> mapEntry(attempt, maxScore, submittedAttempts))
+                .map(attempt -> mapEntry(attempt, maxScore, rankedAttempts))
                 .toList();
 
         return QuizLeaderboardResponse.builder()
                 .quizId(quiz.getId())
                 .quizTitle(quiz.getTitle())
-                .totalSubmittedAttempts(submittedAttempts.size())
+                .totalSubmittedAttempts(rankedAttempts.size())
                 .returnedEntries(entries.size())
                 .entries(entries)
                 .build();
@@ -66,6 +75,28 @@ public class QuizLeaderboardService {
                 .wrongAnswers(attempt.getWrongAnswers())
                 .submittedAt(attempt.getSubmittedAt())
                 .build();
+    }
+
+    private QuizAttempt pickBetterAttempt(QuizAttempt current, QuizAttempt candidate) {
+        Comparator<QuizAttempt> comparator = leaderboardComparator();
+        return comparator.compare(current, candidate) <= 0 ? current : candidate;
+    }
+
+    private Comparator<QuizAttempt> leaderboardComparator() {
+        return Comparator.comparing(QuizAttempt::getScore, Comparator.reverseOrder())
+                .thenComparing(this::calculatePercentage, Comparator.reverseOrder())
+                .thenComparing(QuizAttempt::getSubmittedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(QuizAttempt::getId);
+    }
+
+    private Double calculatePercentage(QuizAttempt attempt) {
+        double maxScore = attempt.getQuiz().getQuestions().stream()
+                .mapToInt(question -> question.getPoints())
+                .sum();
+        if (maxScore == 0.0) {
+            return 0.0;
+        }
+        return Math.max(0.0, (attempt.getScore() / maxScore) * 100.0);
     }
 
     private Quiz getQuiz(Long quizId) {
