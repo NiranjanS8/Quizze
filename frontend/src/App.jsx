@@ -677,12 +677,17 @@ function QuizDetailPage({ auth, setError, setMessage }) {
   const { quizId } = useParams();
   const navigate = useNavigate();
   const [quiz, setQuiz] = useState(null);
+  const [leaderboard, setLeaderboard] = useState(null);
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
-    apiRequest(`/api/quizzes/${quizId}`, {}, auth.token)
-      .then((data) => {
-        setQuiz(data);
+    Promise.all([
+      apiRequest(`/api/quizzes/${quizId}`, {}, auth.token),
+      apiRequest(`/api/quizzes/${quizId}/leaderboard?limit=5`, {}, auth.token),
+    ])
+      .then(([quizData, leaderboardData]) => {
+        setQuiz(quizData);
+        setLeaderboard(leaderboardData);
         setError("");
       })
       .catch((loadError) => setError(loadError.message));
@@ -706,40 +711,66 @@ function QuizDetailPage({ auth, setError, setMessage }) {
   }
 
   return (
-    <Card className="detail-card">
-      <div className="hero">
-        <div>
-          <span className="tag">{quiz.categoryName || quiz.difficulty}</span>
-          <h2 style={{ marginTop: 16 }}>{quiz.title}</h2>
-          <p>{quiz.description || "A structured quiz with time limits, multiple questions, and automatic scoring."}</p>
-          <div className="chip-row" style={{ marginTop: 16 }}>
-            <span className="badge">{quiz.difficulty}</span>
-            {quiz.oneAttemptOnly ? <span className="badge">One attempt only</span> : null}
-            {quiz.negativeMarkingEnabled ? <span className="badge badge-warn">Negative marking enabled</span> : null}
-            <span className="badge">Randomized questions</span>
+    <section className="detail-layout">
+      <Card className="detail-card">
+        <div className="hero">
+          <div>
+            <span className="tag">{quiz.categoryName || quiz.difficulty}</span>
+            <h2 style={{ marginTop: 16 }}>{quiz.title}</h2>
+            <p>{quiz.description || "A structured quiz with time limits, multiple questions, and automatic scoring."}</p>
+            <div className="chip-row" style={{ marginTop: 16 }}>
+              <span className="badge">{quiz.difficulty}</span>
+              {quiz.oneAttemptOnly ? <span className="badge">One attempt only</span> : null}
+              {quiz.negativeMarkingEnabled ? <span className="badge badge-warn">Negative marking enabled</span> : null}
+              <span className="badge">Randomized questions</span>
+            </div>
           </div>
+          <Card className="detail-summary">
+            <div className="list">
+              <div>
+                <div className="stat-label">Difficulty</div>
+                <div className="detail-value">{quiz.difficulty}</div>
+              </div>
+              <div>
+                <div className="stat-label">Duration</div>
+                <div className="detail-value">{quiz.timeLimitInMinutes} Minutes</div>
+              </div>
+              <div>
+                <div className="stat-label">Questions</div>
+                <div className="detail-value">{quiz.questionCount}</div>
+              </div>
+              <Button className="primary-btn" disabled={starting} onClick={startQuiz} type="button">
+                {starting ? "Preparing..." : "Start Quiz"}
+              </Button>
+            </div>
+          </Card>
         </div>
-        <Card className="detail-summary">
-          <div className="list">
-            <div>
-              <div className="stat-label">Difficulty</div>
-              <div className="detail-value">{quiz.difficulty}</div>
+      </Card>
+
+      <Card>
+        <div className="panel-title-row">
+          <h3 className="panel-title">Leaderboard</h3>
+          <span className="muted tiny">{leaderboard?.totalSubmittedAttempts || 0} submitted attempts</span>
+        </div>
+        <div className="list">
+          {leaderboard?.entries?.map((entry) => (
+            <div className="leaderboard-item" key={`${entry.rank}-${entry.userId}-${entry.submittedAt}`}>
+              <div className="leaderboard-rank">#{entry.rank}</div>
+              <div className="leaderboard-meta">
+                <div className="list-title">{entry.username}</div>
+                <div className="muted tiny">
+                  {Math.round(entry.percentage || 0)}% | {entry.correctAnswers} correct | {new Date(entry.submittedAt).toLocaleString()}
+                </div>
+              </div>
+              <div className="leaderboard-score">
+                {entry.score} / {entry.maxScore}
+              </div>
             </div>
-            <div>
-              <div className="stat-label">Duration</div>
-              <div className="detail-value">{quiz.timeLimitInMinutes} Minutes</div>
-            </div>
-            <div>
-              <div className="stat-label">Questions</div>
-              <div className="detail-value">{quiz.questionCount}</div>
-            </div>
-            <Button className="primary-btn" disabled={starting} onClick={startQuiz} type="button">
-              {starting ? "Preparing..." : "Start Quiz"}
-            </Button>
-          </div>
-        </Card>
-      </div>
-    </Card>
+          ))}
+          {!leaderboard?.entries?.length ? <div className="empty-state">No submitted attempts yet. The leaderboard will appear after the first completed quiz.</div> : null}
+        </div>
+      </Card>
+    </section>
   );
 }
 

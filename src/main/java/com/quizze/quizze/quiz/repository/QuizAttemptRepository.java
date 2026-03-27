@@ -1,5 +1,6 @@
 package com.quizze.quizze.quiz.repository;
 
+import com.quizze.quizze.quiz.domain.AttemptStatus;
 import com.quizze.quizze.quiz.domain.QuizAttempt;
 import java.util.List;
 import java.util.Optional;
@@ -10,6 +11,8 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
     List<QuizAttempt> findByUserId(Long userId);
 
     List<QuizAttempt> findByQuizId(Long quizId);
+
+    List<QuizAttempt> findByQuizIdAndStatus(Long quizId, AttemptStatus status);
 
     List<QuizAttempt> findByUserIdAndQuizId(Long userId, Long quizId);
 

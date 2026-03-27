@@ -617,8 +617,45 @@ button {
   padding: 14px 16px;
 }
 
+.leaderboard-item {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+
+.leaderboard-rank {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--success);
+  font-weight: 700;
+}
+
+.leaderboard-meta {
+  min-width: 0;
+}
+
+.leaderboard-score {
+  font-weight: 700;
+  color: var(--text);
+}
+
 .detail-card {
   padding: 28px;
+}
+
+.detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  gap: 24px;
 }
 
 .detail-summary {
@@ -852,6 +889,7 @@ tbody tr {
 @media (max-width: 1080px) {
   .auth-wrap,
   .dashboard-grid,
+  .detail-layout,
   .result-grid,
   .metric-grid,
   .stats-grid,
@@ -886,6 +924,10 @@ tbody tr {
   .pagination-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .leaderboard-item {
+    grid-template-columns: 1fr;
   }
 
   .detail-summary {

@@ -5,7 +5,9 @@ import com.quizze.quizze.quiz.dto.admin.QuestionRequest;
 import com.quizze.quizze.quiz.dto.admin.QuestionResponse;
 import com.quizze.quizze.quiz.dto.admin.QuizRequest;
 import com.quizze.quizze.quiz.dto.admin.QuizResponse;
+import com.quizze.quizze.quiz.dto.leaderboard.QuizLeaderboardResponse;
 import com.quizze.quizze.quiz.service.AdminQuizService;
+import com.quizze.quizze.quiz.service.QuizLeaderboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -34,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminController {
 
     private final AdminQuizService adminQuizService;
+    private final QuizLeaderboardService quizLeaderboardService;
 
     @GetMapping("/access-check")
     @Operation(
@@ -71,6 +75,22 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Quiz fetched successfully",
                 adminQuizService.getQuiz(id)
+        ));
+    }
+
+    @GetMapping("/quizzes/{id}/leaderboard")
+    @Operation(
+            summary = "Get quiz leaderboard",
+            description = "Returns ranked submitted attempts for a quiz, ordered by highest score and earliest submission time.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<QuizLeaderboardResponse>> getQuizLeaderboard(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Quiz leaderboard fetched successfully",
+                quizLeaderboardService.getLeaderboard(id, limit, false)
         ));
     }
 

@@ -1,6 +1,7 @@
 package com.quizze.quizze.quiz.controller;
 
 import com.quizze.quizze.common.api.ApiResponse;
+import com.quizze.quizze.quiz.dto.leaderboard.QuizLeaderboardResponse;
 import com.quizze.quizze.quiz.domain.DifficultyLevel;
 import com.quizze.quizze.quiz.dto.user.AttemptQuestionsResponse;
 import com.quizze.quizze.quiz.dto.user.QuizCatalogResponse;
@@ -10,6 +11,7 @@ import com.quizze.quizze.quiz.dto.user.StartQuizResponse;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizResponse;
 import com.quizze.quizze.quiz.service.UserQuizService;
+import com.quizze.quizze.quiz.service.QuizLeaderboardService;
 import com.quizze.quizze.security.user.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -38,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserQuizController {
 
     private final UserQuizService userQuizService;
+    private final QuizLeaderboardService quizLeaderboardService;
 
     @GetMapping
     @Operation(
@@ -70,6 +73,22 @@ public class UserQuizController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Quiz details fetched successfully",
                 userQuizService.getPublishedQuizDetails(id)
+        ));
+    }
+
+    @GetMapping("/{id}/leaderboard")
+    @Operation(
+            summary = "Get published quiz leaderboard",
+            description = "Returns the top submitted scores for a published quiz, ranked by score and submission time.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<QuizLeaderboardResponse>> getPublishedQuizLeaderboard(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Quiz leaderboard fetched successfully",
+                quizLeaderboardService.getLeaderboard(id, limit, true)
         ));
     }
 
