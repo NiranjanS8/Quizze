@@ -886,12 +886,30 @@ tbody tr {
   font-weight: 500;
 }
 
+.analytics-grid {
+  margin-top: 0;
+}
+
+.analytics-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.analytics-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
 @media (max-width: 1080px) {
   .auth-wrap,
   .dashboard-grid,
   .detail-layout,
   .result-grid,
   .metric-grid,
+  .analytics-summary-grid,
   .stats-grid,
   .cards-grid,
   .question-grid,

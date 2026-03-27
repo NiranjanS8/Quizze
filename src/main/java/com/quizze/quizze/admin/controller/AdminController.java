@@ -1,12 +1,14 @@
 package com.quizze.quizze.admin.controller;
 
 import com.quizze.quizze.common.api.ApiResponse;
+import com.quizze.quizze.quiz.dto.analytics.QuizPerformanceAnalyticsResponse;
 import com.quizze.quizze.quiz.dto.admin.QuestionRequest;
 import com.quizze.quizze.quiz.dto.admin.QuestionResponse;
 import com.quizze.quizze.quiz.dto.admin.QuizRequest;
 import com.quizze.quizze.quiz.dto.admin.QuizResponse;
 import com.quizze.quizze.quiz.dto.leaderboard.QuizLeaderboardResponse;
 import com.quizze.quizze.quiz.service.AdminQuizService;
+import com.quizze.quizze.quiz.service.QuizAnalyticsService;
 import com.quizze.quizze.quiz.service.QuizLeaderboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -37,6 +39,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class AdminController {
 
     private final AdminQuizService adminQuizService;
+    private final QuizAnalyticsService quizAnalyticsService;
     private final QuizLeaderboardService quizLeaderboardService;
 
     @GetMapping("/access-check")
@@ -91,6 +94,19 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Quiz leaderboard fetched successfully",
                 quizLeaderboardService.getLeaderboard(id, limit, false)
+        ));
+    }
+
+    @GetMapping("/quizzes/{id}/analytics")
+    @Operation(
+            summary = "Get quiz performance analytics",
+            description = "Returns quiz-level attempt and scoring analytics for admin reporting.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<QuizPerformanceAnalyticsResponse>> getQuizAnalytics(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Quiz analytics fetched successfully",
+                quizAnalyticsService.getQuizPerformanceAnalytics(id)
         ));
     }
 

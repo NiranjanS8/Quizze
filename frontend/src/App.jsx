@@ -1085,12 +1085,18 @@ function AdminPage({ auth, setError, setMessage }) {
   const [quizzes, setQuizzes] = useState([]);
   const [mode, setMode] = useState("create");
   const [activeQuiz, setActiveQuiz] = useState(null);
+  const [selectedQuizId, setSelectedQuizId] = useState(null);
+  const [quizAnalytics, setQuizAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   async function loadQuizzes() {
     try {
       const data = await apiRequest("/api/admin/quizzes", {}, auth.token);
       setQuizzes(data);
+      if (!selectedQuizId && data.length) {
+        setSelectedQuizId(data[0].id);
+      }
       setError("");
     } catch (loadError) {
       setError(loadError.message);
@@ -1100,6 +1106,22 @@ function AdminPage({ auth, setError, setMessage }) {
   useEffect(() => {
     loadQuizzes();
   }, [auth.token]);
+
+  useEffect(() => {
+    if (!selectedQuizId) {
+      setQuizAnalytics(null);
+      return;
+    }
+
+    setAnalyticsLoading(true);
+    apiRequest(`/api/admin/quizzes/${selectedQuizId}/analytics`, {}, auth.token)
+      .then((data) => {
+        setQuizAnalytics(data);
+        setError("");
+      })
+      .catch((loadError) => setError(loadError.message))
+      .finally(() => setAnalyticsLoading(false));
+  }, [auth.token, selectedQuizId, setError]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -1270,11 +1292,15 @@ function AdminPage({ auth, setError, setMessage }) {
                   </div>
                 </div>
                 <div className="action-group">
+                  <Button className="ghost-btn" onClick={() => setSelectedQuizId(quiz.id)} type="button">
+                    Analytics
+                  </Button>
                   <Button
                     className="secondary-btn"
                     onClick={() => {
                       setMode("edit");
                       setActiveQuiz(quiz);
+                      setSelectedQuizId(quiz.id);
                     }}
                     type="button"
                   >
@@ -1290,6 +1316,70 @@ function AdminPage({ auth, setError, setMessage }) {
           </div>
         </Card>
       </section>
+
+      <Card>
+        <div className="panel-title-row">
+          <h3 className="panel-title">Quiz Analytics</h3>
+          <span className="muted tiny">{quizAnalytics?.quizTitle || "Select a quiz"}</span>
+        </div>
+
+        {analyticsLoading ? (
+          <div className="empty-state">Loading analytics...</div>
+        ) : quizAnalytics ? (
+          <>
+            <section className="metric-grid analytics-grid">
+              <article className="stat-card">
+                <div className="stat-label">Total Attempts</div>
+                <div className="stat-value">{quizAnalytics.totalAttempts}</div>
+              </article>
+              <article className="stat-card">
+                <div className="stat-label">Submitted</div>
+                <div className="stat-value accent-primary">{quizAnalytics.submittedAttempts}</div>
+              </article>
+              <article className="stat-card">
+                <div className="stat-label">Completion Rate</div>
+                <div className="stat-value accent-success">{Math.round(quizAnalytics.completionRate || 0)}%</div>
+              </article>
+              <article className="stat-card">
+                <div className="stat-label">Average Score</div>
+                <div className="stat-value accent-secondary">
+                  {Number(quizAnalytics.averageScore || 0).toFixed(1)} / {Number(quizAnalytics.maxScore || 0).toFixed(1)}
+                </div>
+              </article>
+            </section>
+
+            <section className="analytics-summary-grid">
+              <div className="list-item">
+                <div className="list-title">Scoring Summary</div>
+                <div className="analytics-list">
+                  <div className="helper-row"><span className="muted">Average Percentage</span><strong>{Math.round(quizAnalytics.averagePercentage || 0)}%</strong></div>
+                  <div className="helper-row"><span className="muted">Highest Score</span><strong>{Number(quizAnalytics.highestScore || 0).toFixed(1)}</strong></div>
+                  <div className="helper-row"><span className="muted">Lowest Score</span><strong>{Number(quizAnalytics.lowestScore || 0).toFixed(1)}</strong></div>
+                </div>
+              </div>
+
+              <div className="list-item">
+                <div className="list-title">Attempt Breakdown</div>
+                <div className="analytics-list">
+                  <div className="helper-row"><span className="muted">In Progress</span><strong>{quizAnalytics.inProgressAttempts}</strong></div>
+                  <div className="helper-row"><span className="muted">Expired</span><strong>{quizAnalytics.expiredAttempts}</strong></div>
+                  <div className="helper-row"><span className="muted">Last Submission</span><strong>{quizAnalytics.lastSubmittedAt ? new Date(quizAnalytics.lastSubmittedAt).toLocaleString() : "-"}</strong></div>
+                </div>
+              </div>
+
+              <div className="list-item">
+                <div className="list-title">Answer Quality</div>
+                <div className="analytics-list">
+                  <div className="helper-row"><span className="muted">Avg Correct</span><strong>{Number(quizAnalytics.averageCorrectAnswers || 0).toFixed(1)}</strong></div>
+                  <div className="helper-row"><span className="muted">Avg Wrong</span><strong>{Number(quizAnalytics.averageWrongAnswers || 0).toFixed(1)}</strong></div>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : (
+          <div className="empty-state">Select a quiz to view analytics.</div>
+        )}
+      </Card>
     </>
   );
 }
