@@ -1088,6 +1088,7 @@ function AdminPage({ auth, setError, setMessage }) {
   const [activeQuiz, setActiveQuiz] = useState(null);
   const [selectedQuizId, setSelectedQuizId] = useState(null);
   const [quizAnalytics, setQuizAnalytics] = useState(null);
+  const [questionAnalytics, setQuestionAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1115,13 +1116,18 @@ function AdminPage({ auth, setError, setMessage }) {
   useEffect(() => {
     if (!selectedQuizId) {
       setQuizAnalytics(null);
+      setQuestionAnalytics(null);
       return;
     }
 
     setAnalyticsLoading(true);
-    apiRequest(`/api/admin/quizzes/${selectedQuizId}/analytics`, {}, auth.token)
-      .then((data) => {
-        setQuizAnalytics(data);
+    Promise.all([
+      apiRequest(`/api/admin/quizzes/${selectedQuizId}/analytics`, {}, auth.token),
+      apiRequest(`/api/admin/quizzes/${selectedQuizId}/questions/analytics`, {}, auth.token),
+    ])
+      .then(([quizAnalyticsData, questionAnalyticsData]) => {
+        setQuizAnalytics(quizAnalyticsData);
+        setQuestionAnalytics(questionAnalyticsData);
         setError("");
       })
       .catch((loadError) => setError(loadError.message))
@@ -1431,6 +1437,48 @@ function AdminPage({ auth, setError, setMessage }) {
           <div className="empty-state">Select a quiz to view analytics.</div>
         )}
       </Card>
+
+      <section className="dashboard-grid">
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">Hardest Questions</h3>
+            <span className="muted tiny">{questionAnalytics?.quizTitle || "Selected quiz"}</span>
+          </div>
+          <div className="list">
+            {questionAnalytics?.hardestQuestions?.map((item) => (
+              <div className="list-item" key={`hard-${item.questionId}`}>
+                <div className="list-title">{item.questionContent}</div>
+                <div className="muted tiny analytics-metadata">
+                  {Math.round(item.correctPercentage || 0)}% correct | {item.totalAnswers} answers | {item.points} pts
+                </div>
+              </div>
+            ))}
+            {!analyticsLoading && !questionAnalytics?.hardestQuestions?.length ? (
+              <div className="empty-state">No question analytics yet for this quiz.</div>
+            ) : null}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">Easiest Questions</h3>
+            <span className="muted tiny">{questionAnalytics?.quizTitle || "Selected quiz"}</span>
+          </div>
+          <div className="list">
+            {questionAnalytics?.easiestQuestions?.map((item) => (
+              <div className="list-item" key={`easy-${item.questionId}`}>
+                <div className="list-title">{item.questionContent}</div>
+                <div className="muted tiny analytics-metadata">
+                  {Math.round(item.correctPercentage || 0)}% correct | {item.totalAnswers} answers | {item.points} pts
+                </div>
+              </div>
+            ))}
+            {!analyticsLoading && !questionAnalytics?.easiestQuestions?.length ? (
+              <div className="empty-state">No question analytics yet for this quiz.</div>
+            ) : null}
+          </div>
+        </Card>
+      </section>
     </>
   );
 }

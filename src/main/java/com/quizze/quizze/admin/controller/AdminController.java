@@ -3,6 +3,7 @@ package com.quizze.quizze.admin.controller;
 import com.quizze.quizze.common.api.ApiResponse;
 import com.quizze.quizze.quiz.dto.analytics.QuizPerformanceAnalyticsResponse;
 import com.quizze.quizze.quiz.dto.analytics.AdminOverviewResponse;
+import com.quizze.quizze.quiz.dto.analytics.QuestionAnalyticsResponse;
 import com.quizze.quizze.quiz.dto.admin.QuestionRequest;
 import com.quizze.quizze.quiz.dto.admin.QuestionResponse;
 import com.quizze.quizze.quiz.dto.admin.QuizRequest;
@@ -12,6 +13,7 @@ import com.quizze.quizze.quiz.service.AdminQuizService;
 import com.quizze.quizze.quiz.service.AdminOverviewService;
 import com.quizze.quizze.quiz.service.QuizAnalyticsService;
 import com.quizze.quizze.quiz.service.QuizLeaderboardService;
+import com.quizze.quizze.quiz.service.QuestionAnalyticsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -44,6 +46,7 @@ public class AdminController {
     private final AdminOverviewService adminOverviewService;
     private final QuizAnalyticsService quizAnalyticsService;
     private final QuizLeaderboardService quizLeaderboardService;
+    private final QuestionAnalyticsService questionAnalyticsService;
 
     @GetMapping("/access-check")
     @Operation(
@@ -123,6 +126,19 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Quiz analytics fetched successfully",
                 quizAnalyticsService.getQuizPerformanceAnalytics(id)
+        ));
+    }
+
+    @GetMapping("/quizzes/{id}/questions/analytics")
+    @Operation(
+            summary = "Get question-level analytics",
+            description = "Returns hardest and easiest questions for a quiz based on submitted answer accuracy.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<QuestionAnalyticsResponse>> getQuestionAnalytics(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Question analytics fetched successfully",
+                questionAnalyticsService.getQuestionAnalytics(id)
         ));
     }
 

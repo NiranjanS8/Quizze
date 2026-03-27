@@ -903,6 +903,10 @@ tbody tr {
   margin-top: 14px;
 }
 
+.analytics-metadata {
+  margin-top: 8px;
+}
+
 .overview-emphasis {
   font-size: 24px;
   font-weight: 700;
