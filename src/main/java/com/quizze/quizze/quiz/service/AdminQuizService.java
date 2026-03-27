@@ -37,6 +37,20 @@ public class AdminQuizService {
         return mapQuizResponse(savedQuiz);
     }
 
+    @Transactional(readOnly = true)
+    public List<QuizResponse> getAllQuizzes() {
+        return quizRepository.findAll()
+                .stream()
+                .sorted(Comparator.comparing(Quiz::getCreatedAt).reversed())
+                .map(this::mapQuizResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public QuizResponse getQuiz(Long quizId) {
+        return mapQuizResponse(getQuizEntity(quizId));
+    }
+
     @Transactional
     public QuizResponse updateQuiz(Long quizId, QuizRequest request) {
         Quiz quiz = getQuizEntity(quizId);

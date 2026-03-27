@@ -48,6 +48,32 @@ public class AdminController {
         ));
     }
 
+    @GetMapping("/quizzes")
+    @Operation(
+            summary = "List all quizzes",
+            description = "Returns all quizzes, including drafts and published items, for admin management.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<java.util.List<QuizResponse>>> getAllQuizzes() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Quizzes fetched successfully",
+                adminQuizService.getAllQuizzes()
+        ));
+    }
+
+    @GetMapping("/quizzes/{id}")
+    @Operation(
+            summary = "Get quiz details",
+            description = "Returns full quiz metadata and questions for an admin-managed quiz.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<QuizResponse>> getQuiz(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Quiz fetched successfully",
+                adminQuizService.getQuiz(id)
+        ));
+    }
+
     @PostMapping("/quizzes")
     @Operation(
             summary = "Create quiz",

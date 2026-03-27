@@ -37,6 +37,7 @@ replay_pid*
 application-local.properties
 application-dev.properties
 Online Quiz Platform using Spring Boot.md
+stitch/
 
 # Test and coverage artifacts
 coverage/
