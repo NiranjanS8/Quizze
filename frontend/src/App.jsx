@@ -50,6 +50,35 @@ async function apiRequest(path, options = {}, token) {
   return payload.data;
 }
 
+function buildQueryString(params) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      searchParams.set(key, value);
+    }
+  });
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : "";
+}
+
+function formatRemainingTime(targetTime) {
+  if (!targetTime) {
+    return null;
+  }
+
+  const diff = new Date(targetTime).getTime() - Date.now();
+  if (diff <= 0) {
+    return "00:00";
+  }
+
+  const totalSeconds = Math.floor(diff / 1000);
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
 function Button({ children, className = "", ...props }) {
   return (
     <button className={`btn ${className}`.trim()} {...props}>
@@ -62,7 +91,7 @@ function Card({ className = "", children }) {
   return <section className={`card ${className}`.trim()}>{children}</section>;
 }
 
-function Field({ icon, label, name, placeholder, type = "text", as = "input", defaultValue, ...props }) {
+function Field({ icon, label, name, placeholder, type = "text", as = "input", defaultValue, value, ...props }) {
   return (
     <div className="field">
       <label className="field-label">{label}</label>
@@ -74,6 +103,7 @@ function Field({ icon, label, name, placeholder, type = "text", as = "input", de
             defaultValue={defaultValue}
             name={name}
             placeholder={placeholder}
+            value={value}
             {...props}
           />
         ) : (
@@ -84,6 +114,7 @@ function Field({ icon, label, name, placeholder, type = "text", as = "input", de
             placeholder={placeholder}
             required={props.required ?? true}
             type={type}
+            value={value}
             {...props}
           />
         )}
@@ -382,6 +413,11 @@ function QuizCard({ quiz }) {
           <h4>{quiz.title}</h4>
           <p className="muted">{quiz.description || "A focused assessment with automatic scoring and a clean attempt flow."}</p>
         </div>
+        <div className="chip-row">
+          <span className="badge">{quiz.difficulty}</span>
+          {quiz.oneAttemptOnly ? <span className="badge">One attempt</span> : null}
+          {quiz.negativeMarkingEnabled ? <span className="badge badge-warn">Negative marking</span> : null}
+        </div>
         <div className="helper-row">
           <div className="tiny muted">{quiz.questionCount} questions</div>
           <Link className="btn primary-btn" to={`/quizzes/${quiz.id}`}>
@@ -395,6 +431,7 @@ function QuizCard({ quiz }) {
 
 function DashboardPage({ auth, setError, setMessage }) {
   const [quizzes, setQuizzes] = useState([]);
+  const [quizCount, setQuizCount] = useState(0);
   const [attemptHistory, setAttemptHistory] = useState([]);
   const [resultHistory, setResultHistory] = useState([]);
 
@@ -402,13 +439,14 @@ function DashboardPage({ auth, setError, setMessage }) {
     let cancelled = false;
 
     Promise.all([
-      apiRequest("/api/quizzes", {}, auth.token),
+      apiRequest("/api/quizzes?page=0&size=4&sortBy=createdAt&sortDir=desc", {}, auth.token),
       apiRequest("/api/users/me/attempts", {}, auth.token),
       apiRequest("/api/users/me/results", {}, auth.token),
     ])
       .then(([quizData, attemptData, resultData]) => {
         if (cancelled) return;
-        setQuizzes(quizData);
+        setQuizzes(quizData.content || []);
+        setQuizCount(quizData.totalElements || 0);
         setAttemptHistory(attemptData);
         setResultHistory(resultData);
         setError("");
@@ -449,7 +487,7 @@ function DashboardPage({ auth, setError, setMessage }) {
         </article>
         <article className="stat-card">
           <div className="stat-label">Available Quizzes</div>
-          <div className="stat-value">{quizzes.length}</div>
+          <div className="stat-value">{quizCount}</div>
         </article>
       </section>
 
@@ -507,21 +545,109 @@ function DashboardPage({ auth, setError, setMessage }) {
 
 function QuizLibraryPage({ auth, setError }) {
   const [quizzes, setQuizzes] = useState([]);
+  const [availableCategories, setAvailableCategories] = useState([]);
+  const [filters, setFilters] = useState({
+    search: "",
+    category: "",
+    difficulty: "",
+    sortBy: "createdAt",
+    sortDir: "desc",
+    page: 0,
+    size: 6,
+  });
+  const [pageMeta, setPageMeta] = useState({
+    pageNumber: 0,
+    totalPages: 0,
+    totalElements: 0,
+    hasNext: false,
+    hasPrevious: false,
+  });
 
   useEffect(() => {
-    apiRequest("/api/quizzes", {}, auth.token)
-      .then(setQuizzes)
+    const query = buildQueryString(filters);
+
+    apiRequest(`/api/quizzes${query}`, {}, auth.token)
+      .then((data) => {
+        setQuizzes(data.content || []);
+        setAvailableCategories(data.availableCategories || []);
+        setPageMeta({
+          pageNumber: data.pageNumber,
+          totalPages: data.totalPages,
+          totalElements: data.totalElements,
+          hasNext: data.hasNext,
+          hasPrevious: data.hasPrevious,
+        });
+      })
       .catch((loadError) => setError(loadError.message));
-  }, [auth.token, setError]);
+  }, [auth.token, filters, setError]);
+
+  function updateFilter(name, value) {
+    setFilters((current) => ({
+      ...current,
+      [name]: value,
+      page: name === "page" ? value : 0,
+    }));
+  }
 
   return (
     <>
       <section className="hero">
         <div>
           <h2>Quiz Library</h2>
-          <p>Browse published quizzes, review the key details, and start an attempt when you are ready.</p>
+          <p>Browse published quizzes with category filters, search, sorting, and paginated results.</p>
         </div>
       </section>
+
+      <Card>
+        <div className="filters-grid">
+          <Field
+            label="Search"
+            name="search"
+            placeholder="Search by title or category"
+            required={false}
+            value={filters.search}
+            onChange={(event) => updateFilter("search", event.target.value)}
+          />
+          <div className="field">
+            <label className="field-label">Category</label>
+            <div className="field-shell">
+              <select className="field-input field-select" value={filters.category} onChange={(event) => updateFilter("category", event.target.value)}>
+                <option value="">All categories</option>
+                {availableCategories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="field">
+            <label className="field-label">Difficulty</label>
+            <div className="field-shell">
+              <select className="field-input field-select" value={filters.difficulty} onChange={(event) => updateFilter("difficulty", event.target.value)}>
+                <option value="">All levels</option>
+                <option value="EASY">EASY</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="HARD">HARD</option>
+              </select>
+            </div>
+          </div>
+          <div className="field">
+            <label className="field-label">Sort</label>
+            <div className="field-shell">
+              <select className="field-input field-select" value={`${filters.sortBy}:${filters.sortDir}`} onChange={(event) => {
+                const [sortBy, sortDir] = event.target.value.split(":");
+                setFilters((current) => ({ ...current, sortBy, sortDir, page: 0 }));
+              }}>
+                <option value="createdAt:desc">Newest first</option>
+                <option value="title:asc">Title A-Z</option>
+                <option value="difficulty:asc">Difficulty</option>
+                <option value="timeLimitInMinutes:asc">Shortest time</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <section className="cards-grid">
         {quizzes.map((quiz) => (
@@ -529,6 +655,20 @@ function QuizLibraryPage({ auth, setError }) {
         ))}
         {!quizzes.length ? <Card className="empty-state">No published quizzes available.</Card> : null}
       </section>
+
+      <div className="pagination-row">
+        <div className="muted tiny">
+          Showing page {pageMeta.totalPages ? pageMeta.pageNumber + 1 : 0} of {pageMeta.totalPages} | {pageMeta.totalElements} quizzes
+        </div>
+        <div className="action-group">
+          <Button className="ghost-btn" disabled={!pageMeta.hasPrevious} onClick={() => updateFilter("page", Math.max(0, filters.page - 1))} type="button">
+            Previous
+          </Button>
+          <Button className="primary-btn" disabled={!pageMeta.hasNext} onClick={() => updateFilter("page", filters.page + 1)} type="button">
+            Next
+          </Button>
+        </div>
+      </div>
     </>
   );
 }
@@ -572,6 +712,12 @@ function QuizDetailPage({ auth, setError, setMessage }) {
           <span className="tag">{quiz.categoryName || quiz.difficulty}</span>
           <h2 style={{ marginTop: 16 }}>{quiz.title}</h2>
           <p>{quiz.description || "A structured quiz with time limits, multiple questions, and automatic scoring."}</p>
+          <div className="chip-row" style={{ marginTop: 16 }}>
+            <span className="badge">{quiz.difficulty}</span>
+            {quiz.oneAttemptOnly ? <span className="badge">One attempt only</span> : null}
+            {quiz.negativeMarkingEnabled ? <span className="badge badge-warn">Negative marking enabled</span> : null}
+            <span className="badge">Randomized questions</span>
+          </div>
         </div>
         <Card className="detail-summary">
           <div className="list">
@@ -600,51 +746,68 @@ function QuizDetailPage({ auth, setError, setMessage }) {
 function AttemptPage({ auth, setError, setMessage }) {
   const { attemptId } = useParams();
   const navigate = useNavigate();
-  const [questions, setQuestions] = useState([]);
+  const [attemptData, setAttemptData] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(null);
 
   useEffect(() => {
     apiRequest(`/api/quizzes/attempts/${attemptId}/questions`, {}, auth.token)
       .then((data) => {
-        setQuestions(data);
+        setAttemptData(data);
+        setTimeLeft(formatRemainingTime(data.expiresAt));
         setError("");
       })
       .catch((loadError) => setError(loadError.message));
   }, [attemptId, auth.token, setError]);
 
-  if (!questions.length) {
+  useEffect(() => {
+    if (!attemptData?.expiresAt || submitting) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      const nextValue = formatRemainingTime(attemptData.expiresAt);
+      setTimeLeft(nextValue);
+
+      if (nextValue === "00:00") {
+        window.clearInterval(intervalId);
+        submitQuiz(true);
+      }
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [answers, attemptData?.expiresAt, submitting]);
+
+  if (!attemptData?.questions?.length) {
     return <Card>Loading attempt questions...</Card>;
   }
 
+  const questions = attemptData.questions;
   const question = questions[currentIndex];
   const progress = ((currentIndex + 1) / questions.length) * 100;
 
-  async function submitQuiz() {
-    const unanswered = questions.find((item) => !answers[item.id]);
-    if (unanswered) {
-      setError("Answer every question before submitting.");
-      return;
-    }
-
+  async function submitQuiz(autoSubmitted = false) {
     setSubmitting(true);
     try {
-      await apiRequest(
+      const response = await apiRequest(
         `/api/quizzes/attempts/${attemptId}/submit`,
         {
           method: "POST",
           body: JSON.stringify({
-            answers: questions.map((item) => ({
-              questionId: item.id,
-              selectedOptionId: answers[item.id],
-            })),
+            answers: questions
+              .filter((item) => answers[item.id])
+              .map((item) => ({
+                questionId: item.id,
+                selectedOptionId: answers[item.id],
+              })),
           }),
         },
         auth.token,
       );
 
-      setMessage("Quiz submitted successfully.");
+      setMessage(autoSubmitted || response.timeExpired ? "Time ended. Quiz submitted automatically." : "Quiz submitted successfully.");
       navigate(`/results/${attemptId}`);
     } catch (submitError) {
       setError(submitError.message);
@@ -660,9 +823,14 @@ function AttemptPage({ auth, setError, setMessage }) {
           <span className="tag">
             Question {currentIndex + 1} of {questions.length}
           </span>
+          <h3 className="attempt-quiz-title">{attemptData.quizTitle}</h3>
           <h2 style={{ marginTop: 16 }}>{question.content}</h2>
         </div>
         <div className="progress-panel">
+          <div className="helper-row tiny">
+            <span className="muted">Time left</span>
+            <span className={timeLeft === "00:00" ? "accent-secondary" : "accent-success"}>{timeLeft || "No limit"}</span>
+          </div>
           <div className="helper-row tiny muted">
             <span>Progress</span>
             <span>{Math.round(progress)}%</span>
@@ -702,10 +870,6 @@ function AttemptPage({ auth, setError, setMessage }) {
           <Button
             className="primary-btn"
             onClick={() => {
-              if (!answers[question.id]) {
-                setError("Select an option before moving forward.");
-                return;
-              }
               setError("");
               setCurrentIndex((value) => Math.min(questions.length - 1, value + 1));
             }}
@@ -916,7 +1080,7 @@ function AdminPage({ auth, setError, setMessage }) {
       difficulty: formData.get("difficulty"),
       timeLimitInMinutes: Number(formData.get("timeLimitInMinutes")),
       published: formData.get("published") === "on",
-      negativeMarkingEnabled: false,
+      negativeMarkingEnabled: formData.get("negativeMarkingEnabled") === "on",
       oneAttemptOnly: formData.get("oneAttemptOnly") === "on",
     };
 
@@ -1027,6 +1191,10 @@ function AdminPage({ auth, setError, setMessage }) {
                   <span>Published</span>
                 </label>
                 <label className="checkbox-label">
+                  <input defaultChecked={Boolean(activeQuiz?.negativeMarkingEnabled)} name="negativeMarkingEnabled" type="checkbox" />
+                  <span>Negative Marking</span>
+                </label>
+                <label className="checkbox-label">
                   <input defaultChecked={Boolean(activeQuiz?.oneAttemptOnly)} name="oneAttemptOnly" type="checkbox" />
                   <span>One Attempt Only</span>
                 </label>
@@ -1063,7 +1231,11 @@ function AdminPage({ auth, setError, setMessage }) {
                 <div>
                   <div className="list-title">{quiz.title}</div>
                   <div className="muted tiny">
-                    {quiz.categoryName || "Uncategorized"} | {quiz.questionCount} questions | {quiz.published ? "Published" : "Draft"}
+                    {quiz.categoryName || "Uncategorized"} | {quiz.questions?.length || 0} questions | {quiz.published ? "Published" : "Draft"}
+                  </div>
+                  <div className="chip-row" style={{ marginTop: 8 }}>
+                    {quiz.oneAttemptOnly ? <span className="badge">One attempt</span> : null}
+                    {quiz.negativeMarkingEnabled ? <span className="badge badge-warn">Negative marking</span> : null}
                   </div>
                 </div>
                 <div className="action-group">

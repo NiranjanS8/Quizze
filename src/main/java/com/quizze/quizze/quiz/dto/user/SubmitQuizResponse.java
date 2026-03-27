@@ -13,6 +13,9 @@ public class SubmitQuizResponse {
     private final AttemptStatus status;
     private final LocalDateTime submittedAt;
     private final Double score;
+    private final Double maxScore;
+    private final Double percentage;
     private final Integer correctAnswers;
     private final Integer wrongAnswers;
+    private final boolean timeExpired;
 }

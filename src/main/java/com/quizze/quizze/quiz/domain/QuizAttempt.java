@@ -40,6 +40,9 @@ public class QuizAttempt extends BaseEntity {
 
     private LocalDateTime submittedAt;
 
+    @Column(length = 2000)
+    private String questionOrder;
+
     @Column(nullable = false)
     private Double score = 0.0;
 

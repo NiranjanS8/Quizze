@@ -15,5 +15,6 @@ public class QuizDetailResponse {
     private final DifficultyLevel difficulty;
     private final Integer timeLimitInMinutes;
     private final boolean oneAttemptOnly;
+    private final boolean negativeMarkingEnabled;
     private final Integer questionCount;
 }

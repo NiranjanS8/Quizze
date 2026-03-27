@@ -15,4 +15,6 @@ public class QuizSummaryResponse {
     private final DifficultyLevel difficulty;
     private final Integer timeLimitInMinutes;
     private final Integer questionCount;
+    private final boolean oneAttemptOnly;
+    private final boolean negativeMarkingEnabled;
 }

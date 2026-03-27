@@ -1,10 +1,11 @@
 package com.quizze.quizze.quiz.controller;
 
 import com.quizze.quizze.common.api.ApiResponse;
-import com.quizze.quizze.quiz.dto.user.AttemptQuestionResponse;
+import com.quizze.quizze.quiz.domain.DifficultyLevel;
+import com.quizze.quizze.quiz.dto.user.AttemptQuestionsResponse;
+import com.quizze.quizze.quiz.dto.user.QuizCatalogResponse;
 import com.quizze.quizze.quiz.dto.user.QuizDetailResponse;
 import com.quizze.quizze.quiz.dto.user.QuizResultResponse;
-import com.quizze.quizze.quiz.dto.user.QuizSummaryResponse;
 import com.quizze.quizze.quiz.dto.user.StartQuizResponse;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizResponse;
@@ -18,11 +19,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,13 +42,21 @@ public class UserQuizController {
     @GetMapping
     @Operation(
             summary = "List published quizzes",
-            description = "Returns all quizzes currently available to users. Correct answers are never exposed.",
+            description = "Returns published quizzes with search, filter, sorting, and pagination support. Correct answers are never exposed.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<ApiResponse<List<QuizSummaryResponse>>> getPublishedQuizzes() {
+    public ResponseEntity<ApiResponse<QuizCatalogResponse>> getPublishedQuizzes(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) DifficultyLevel difficulty,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "6") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir
+    ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Published quizzes fetched successfully",
-                userQuizService.getPublishedQuizzes()
+                userQuizService.getPublishedQuizzes(search, category, difficulty, page, size, sortBy, sortDir)
         ));
     }
 
@@ -85,7 +94,7 @@ public class UserQuizController {
             description = "Returns the questions and options for a user's specific attempt without correct-answer metadata.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<ApiResponse<List<AttemptQuestionResponse>>> getAttemptQuestions(
+    public ResponseEntity<ApiResponse<AttemptQuestionsResponse>> getAttemptQuestions(
             @PathVariable Long attemptId,
             @AuthenticationPrincipal CustomUserDetails currentUser
     ) {
