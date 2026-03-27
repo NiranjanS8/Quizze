@@ -434,6 +434,7 @@ function DashboardPage({ auth, setError, setMessage }) {
   const [quizCount, setQuizCount] = useState(0);
   const [attemptHistory, setAttemptHistory] = useState([]);
   const [resultHistory, setResultHistory] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -442,13 +443,15 @@ function DashboardPage({ auth, setError, setMessage }) {
       apiRequest("/api/quizzes?page=0&size=4&sortBy=createdAt&sortDir=desc", {}, auth.token),
       apiRequest("/api/users/me/attempts", {}, auth.token),
       apiRequest("/api/users/me/results", {}, auth.token),
+      apiRequest("/api/users/me/analytics", {}, auth.token),
     ])
-      .then(([quizData, attemptData, resultData]) => {
+      .then(([quizData, attemptData, resultData, analyticsData]) => {
         if (cancelled) return;
         setQuizzes(quizData.content || []);
         setQuizCount(quizData.totalElements || 0);
         setAttemptHistory(attemptData);
         setResultHistory(resultData);
+        setAnalytics(analyticsData);
         setError("");
         setMessage("");
       })
@@ -536,6 +539,73 @@ function DashboardPage({ auth, setError, setMessage }) {
               </div>
             ))}
             {!resultHistory.length ? <div className="empty-state">No submitted quiz results yet.</div> : null}
+          </div>
+        </Card>
+      </section>
+
+      <section className="dashboard-grid">
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">Performance Insights</h3>
+            <span className="muted tiny">{analytics?.totalSubmittedAttempts ?? 0} submitted attempts</span>
+          </div>
+          <section className="analytics-summary-grid">
+            <div className="list-item">
+              <div className="list-title">Overall</div>
+              <div className="analytics-list">
+                <div className="helper-row"><span className="muted">Distinct Quizzes</span><strong>{analytics?.totalDistinctQuizzes ?? 0}</strong></div>
+                <div className="helper-row"><span className="muted">Average Score</span><strong>{Number(analytics?.averageScore ?? 0).toFixed(1)}</strong></div>
+                <div className="helper-row"><span className="muted">Average Percentage</span><strong>{Math.round(analytics?.averagePercentage ?? 0)}%</strong></div>
+                <div className="helper-row"><span className="muted">Best Result</span><strong>{Math.round(analytics?.bestPercentage ?? 0)}%</strong></div>
+              </div>
+            </div>
+
+            <div className="list-item">
+              <div className="list-title">Strongest Category</div>
+              {analytics?.strongestCategory ? (
+                <div className="analytics-list">
+                  <div className="helper-row"><span className="muted">Category</span><strong>{analytics.strongestCategory.categoryName}</strong></div>
+                  <div className="helper-row"><span className="muted">Attempts</span><strong>{analytics.strongestCategory.attempts}</strong></div>
+                  <div className="helper-row"><span className="muted">Average</span><strong>{Math.round(analytics.strongestCategory.averagePercentage || 0)}%</strong></div>
+                </div>
+              ) : (
+                <div className="empty-state">No category data yet.</div>
+              )}
+            </div>
+
+            <div className="list-item">
+              <div className="list-title">Weakest Category</div>
+              {analytics?.weakestCategory ? (
+                <div className="analytics-list">
+                  <div className="helper-row"><span className="muted">Category</span><strong>{analytics.weakestCategory.categoryName}</strong></div>
+                  <div className="helper-row"><span className="muted">Attempts</span><strong>{analytics.weakestCategory.attempts}</strong></div>
+                  <div className="helper-row"><span className="muted">Average</span><strong>{Math.round(analytics.weakestCategory.averagePercentage || 0)}%</strong></div>
+                </div>
+              ) : (
+                <div className="empty-state">No category data yet.</div>
+              )}
+            </div>
+          </section>
+        </Card>
+
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">Recent Trend</h3>
+            <span className="muted tiny">Latest submitted results</span>
+          </div>
+          <div className="list">
+            {analytics?.recentTrend?.map((item) => (
+              <div className="list-item" key={item.attemptId}>
+                <div className="helper-row">
+                  <div>
+                    <div className="list-title">{item.quizTitle}</div>
+                    <div className="muted tiny">{item.categoryName} | {new Date(item.submittedAt).toLocaleString()}</div>
+                  </div>
+                  <div className="overview-emphasis">{Math.round(item.percentage || 0)}%</div>
+                </div>
+              </div>
+            ))}
+            {!analytics?.recentTrend?.length ? <div className="empty-state">No submitted trend data yet.</div> : null}
           </div>
         </Card>
       </section>

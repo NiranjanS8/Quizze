@@ -22,6 +22,9 @@ import com.quizze.quizze.quiz.dto.user.StartQuizResponse;
 import com.quizze.quizze.quiz.dto.user.SubmitAnswerRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizResponse;
+import com.quizze.quizze.quiz.dto.user.UserCategoryPerformanceResponse;
+import com.quizze.quizze.quiz.dto.user.UserPerformanceAnalyticsResponse;
+import com.quizze.quizze.quiz.dto.user.UserPerformanceTrendItemResponse;
 import com.quizze.quizze.quiz.repository.QuizAttemptRepository;
 import com.quizze.quizze.quiz.repository.QuizRepository;
 import com.quizze.quizze.user.domain.User;
@@ -36,6 +39,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.LinkedHashMap;
 import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -266,6 +270,65 @@ public class UserQuizService {
         return mapQuizResult(attempt);
     }
 
+    @Transactional(readOnly = true)
+    public UserPerformanceAnalyticsResponse getUserPerformanceAnalytics(Long userId) {
+        List<QuizAttempt> submittedAttempts = quizAttemptRepository.findByUserId(userId).stream()
+                .filter(attempt -> attempt.getStatus() == AttemptStatus.SUBMITTED)
+                .sorted(Comparator.comparing(QuizAttempt::getSubmittedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+
+        double averageScore = submittedAttempts.stream()
+                .mapToDouble(QuizAttempt::getScore)
+                .average()
+                .orElse(0.0);
+
+        double averagePercentage = submittedAttempts.stream()
+                .mapToDouble(this::calculateAttemptPercentage)
+                .average()
+                .orElse(0.0);
+
+        double bestPercentage = submittedAttempts.stream()
+                .mapToDouble(this::calculateAttemptPercentage)
+                .max()
+                .orElse(0.0);
+
+        Map<String, List<QuizAttempt>> attemptsByCategory = submittedAttempts.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        attempt -> attempt.getQuiz().getCategory() == null ? "Uncategorized" : attempt.getQuiz().getCategory().getName(),
+                        LinkedHashMap::new,
+                        java.util.stream.Collectors.toList()
+                ));
+
+        List<UserCategoryPerformanceResponse> categoryPerformances = attemptsByCategory.entrySet().stream()
+                .map(entry -> mapCategoryPerformance(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparing(UserCategoryPerformanceResponse::getAveragePercentage, Comparator.reverseOrder()))
+                .toList();
+
+        List<UserPerformanceTrendItemResponse> recentTrend = submittedAttempts.stream()
+                .limit(5)
+                .map(attempt -> UserPerformanceTrendItemResponse.builder()
+                        .attemptId(attempt.getId())
+                        .quizTitle(attempt.getQuiz().getTitle())
+                        .categoryName(attempt.getQuiz().getCategory() == null ? "Uncategorized" : attempt.getQuiz().getCategory().getName())
+                        .score(attempt.getScore())
+                        .maxScore(calculateMaxScore(attempt.getQuiz()))
+                        .percentage(calculateAttemptPercentage(attempt))
+                        .submittedAt(attempt.getSubmittedAt())
+                        .build())
+                .toList();
+
+        return UserPerformanceAnalyticsResponse.builder()
+                .totalSubmittedAttempts(submittedAttempts.size())
+                .totalDistinctQuizzes(submittedAttempts.stream().map(attempt -> attempt.getQuiz().getId()).distinct().count())
+                .averageScore(averageScore)
+                .averagePercentage(averagePercentage)
+                .bestPercentage(bestPercentage)
+                .strongestCategory(categoryPerformances.isEmpty() ? null : categoryPerformances.get(0))
+                .weakestCategory(categoryPerformances.isEmpty() ? null : categoryPerformances.get(categoryPerformances.size() - 1))
+                .recentTrend(recentTrend)
+                .build();
+    }
+
     private void validateSubmittedAnswers(QuizAttempt attempt, SubmitQuizRequest request) {
         Set<Long> allowedQuestionIds = attempt.getQuiz().getQuestions().stream()
                 .map(Question::getId)
@@ -441,6 +504,19 @@ public class UserQuizService {
             return 0.0;
         }
         return Math.max(0.0, (score / maxScore) * 100.0);
+    }
+
+    private double calculateAttemptPercentage(QuizAttempt attempt) {
+        return calculatePercentage(attempt.getScore(), calculateMaxScore(attempt.getQuiz()));
+    }
+
+    private UserCategoryPerformanceResponse mapCategoryPerformance(String categoryName, List<QuizAttempt> attempts) {
+        return UserCategoryPerformanceResponse.builder()
+                .categoryName(categoryName)
+                .attempts(attempts.size())
+                .averageScore(attempts.stream().mapToDouble(QuizAttempt::getScore).average().orElse(0.0))
+                .averagePercentage(attempts.stream().mapToDouble(this::calculateAttemptPercentage).average().orElse(0.0))
+                .build();
     }
 
     private Sort.Direction resolveSortDirection(String sortDir) {

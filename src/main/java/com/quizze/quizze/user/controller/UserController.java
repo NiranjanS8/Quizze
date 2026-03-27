@@ -3,6 +3,7 @@ package com.quizze.quizze.user.controller;
 import com.quizze.quizze.common.api.ApiResponse;
 import com.quizze.quizze.quiz.dto.user.AttemptHistoryResponse;
 import com.quizze.quizze.quiz.dto.user.QuizResultResponse;
+import com.quizze.quizze.quiz.dto.user.UserPerformanceAnalyticsResponse;
 import com.quizze.quizze.quiz.service.UserQuizService;
 import com.quizze.quizze.security.user.CustomUserDetails;
 import com.quizze.quizze.user.dto.UserProfileResponse;
@@ -88,6 +89,21 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Result history fetched successfully",
                 userQuizService.getResultHistory(currentUser.getUser().getId())
+        ));
+    }
+
+    @GetMapping("/me/analytics")
+    @Operation(
+            summary = "Get current user performance analytics",
+            description = "Returns learning analytics for the authenticated user including average score, strongest category, weakest category, and recent trend.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<UserPerformanceAnalyticsResponse>> getUserPerformanceAnalytics(
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "User performance analytics fetched successfully",
+                userQuizService.getUserPerformanceAnalytics(currentUser.getUser().getId())
         ));
     }
 }
