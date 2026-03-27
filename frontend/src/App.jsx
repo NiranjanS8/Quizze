@@ -1,0 +1,1092 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  Link,
+  Navigate,
+  NavLink,
+  Outlet,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
+const STORAGE_TOKEN = "quizze_token";
+const STORAGE_USER = "quizze_user";
+
+function readStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_USER) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function initials(name) {
+  return (name || "QS")
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+async function apiRequest(path, options = {}, token) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(path, { ...options, headers });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload?.message || "Request failed");
+  }
+
+  return payload.data;
+}
+
+function Button({ children, className = "", ...props }) {
+  return (
+    <button className={`btn ${className}`.trim()} {...props}>
+      {children}
+    </button>
+  );
+}
+
+function Card({ className = "", children }) {
+  return <section className={`card ${className}`.trim()}>{children}</section>;
+}
+
+function Field({ icon, label, name, placeholder, type = "text", as = "input", defaultValue, ...props }) {
+  return (
+    <div className="field">
+      <label className="field-label">{label}</label>
+      <div className={`field-shell${icon ? " with-icon" : ""}`}>
+        {icon ? <span className="material-symbols-outlined field-icon">{icon}</span> : null}
+        {as === "textarea" ? (
+          <textarea
+            className="field-input field-textarea"
+            defaultValue={defaultValue}
+            name={name}
+            placeholder={placeholder}
+            {...props}
+          />
+        ) : (
+          <input
+            className="field-input"
+            defaultValue={defaultValue}
+            name={name}
+            placeholder={placeholder}
+            required={props.required ?? true}
+            type={type}
+            {...props}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [token, setToken] = useState(() => localStorage.getItem(STORAGE_TOKEN) || "");
+  const [user, setUser] = useState(() => readStoredUser());
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const auth = useMemo(
+    () => ({
+      token,
+      user,
+      isAuthenticated: Boolean(token && user),
+      login(authResponse) {
+        const nextUser = {
+          id: authResponse.userId,
+          username: authResponse.username,
+          email: authResponse.email,
+          role: authResponse.role,
+        };
+
+        localStorage.setItem(STORAGE_TOKEN, authResponse.accessToken);
+        localStorage.setItem(STORAGE_USER, JSON.stringify(nextUser));
+        setToken(authResponse.accessToken);
+        setUser(nextUser);
+      },
+      logout() {
+        localStorage.removeItem(STORAGE_TOKEN);
+        localStorage.removeItem(STORAGE_USER);
+        setToken("");
+        setUser(null);
+      },
+    }),
+    [token, user],
+  );
+
+  const sharedProps = { auth, message, setMessage, error, setError };
+
+  return (
+    <Routes>
+      <Route
+        path="/auth"
+        element={
+          auth.isAuthenticated ? (
+            <Navigate to={auth.user?.role === "ADMIN" ? "/admin" : "/dashboard"} replace />
+          ) : (
+            <AuthPage {...sharedProps} />
+          )
+        }
+      />
+      <Route element={<ProtectedLayout {...sharedProps} />}>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<DashboardPage {...sharedProps} />} />
+        <Route path="/quizzes" element={<QuizLibraryPage {...sharedProps} />} />
+        <Route path="/quizzes/:quizId" element={<QuizDetailPage {...sharedProps} />} />
+        <Route path="/attempts/:attemptId" element={<AttemptPage {...sharedProps} />} />
+        <Route path="/history" element={<HistoryPage {...sharedProps} />} />
+        <Route path="/results" element={<ResultsPage {...sharedProps} />} />
+        <Route path="/results/:attemptId" element={<ResultDetailPage {...sharedProps} />} />
+        <Route
+          path="/admin"
+          element={auth.user?.role === "ADMIN" ? <AdminPage {...sharedProps} /> : <Navigate to="/dashboard" replace />}
+        />
+      </Route>
+      <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/auth"} replace />} />
+    </Routes>
+  );
+}
+
+function ProtectedLayout({ auth, message, setMessage, error, setError }) {
+  const navigate = useNavigate();
+
+  if (!auth.isAuthenticated) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  const navItems = [
+    {
+      to: auth.user?.role === "ADMIN" ? "/admin" : "/dashboard",
+      icon: "dashboard",
+      label: auth.user?.role === "ADMIN" ? "Overview" : "Dashboard",
+    },
+    { to: "/quizzes", icon: "quiz", label: "Quizzes" },
+    { to: "/history", icon: "history", label: "History" },
+    { to: "/results", icon: "analytics", label: "Results" },
+  ];
+
+  if (auth.user?.role === "ADMIN") {
+    navItems.push({ to: "/admin", icon: "settings", label: "Admin" });
+  }
+
+  return (
+    <div className="layout">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">Q</div>
+          <div>
+            <h1>Quizze</h1>
+            <p>Assessment workspace</p>
+          </div>
+        </div>
+
+        <nav className="nav">
+          {navItems.map((item) => (
+            <NavLink key={`${item.to}-${item.label}`} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`} to={item.to}>
+              <span className="material-symbols-outlined">{item.icon}</span>
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="sidebar-profile">
+          <div className="avatar">{initials(auth.user?.username)}</div>
+          <div>
+            <div className="profile-name">{auth.user?.username}</div>
+            <div className="muted tiny">{auth.user?.role}</div>
+          </div>
+        </div>
+      </aside>
+
+      <div className="main">
+        <header className="topbar">
+          <div className="topbar-title">
+            <div className="eyebrow">Workspace</div>
+            <div className="topbar-heading">{auth.user?.role === "ADMIN" ? "Admin console" : "Learning dashboard"}</div>
+          </div>
+
+          <div className="topbar-actions">
+            <div className="topbar-user">
+              <div className="topbar-user-name">{auth.user?.username}</div>
+              <div className="muted tiny">{auth.user?.email}</div>
+            </div>
+            <Button
+              className="ghost-btn"
+              onClick={() => {
+                auth.logout();
+                setError("");
+                setMessage("");
+                navigate("/auth", { replace: true });
+              }}
+              type="button"
+            >
+              Logout
+            </Button>
+          </div>
+        </header>
+
+        <main className="canvas">
+          {error ? <div className="error-banner">{error}</div> : null}
+          {message ? <div className="notice">{message}</div> : null}
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function AuthPage({ auth, setMessage, setError }) {
+  const navigate = useNavigate();
+  const [mode, setMode] = useState("login");
+  const [loading, setLoading] = useState(false);
+  const isRegister = mode === "register";
+
+  useEffect(() => {
+    setError("");
+    setMessage("");
+  }, [mode, setError, setMessage]);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      if (isRegister) {
+        if (formData.get("email") !== formData.get("confirmEmail")) {
+          throw new Error("Email confirmation does not match");
+        }
+
+        await apiRequest("/api/auth/register", {
+          method: "POST",
+          body: JSON.stringify({
+            firstName: formData.get("firstName"),
+            lastName: formData.get("lastName"),
+            email: formData.get("email"),
+            username: formData.get("username"),
+            password: formData.get("password"),
+          }),
+        });
+
+        setMode("login");
+        setMessage("Account created. Sign in to continue.");
+      } else {
+        const response = await apiRequest("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({
+            usernameOrEmail: formData.get("usernameOrEmail"),
+            password: formData.get("password"),
+          }),
+        });
+
+        auth.login(response);
+        navigate(response.role === "ADMIN" ? "/admin" : "/dashboard", { replace: true });
+      }
+    } catch (submitError) {
+      setError(submitError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="auth-shell">
+      <main className="auth-wrap">
+        <section className="auth-intro">
+          <div className="logo-stack">
+            <div className="logo-badge">
+              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1", color: "var(--success)", fontSize: 28 }}>
+                check_circle
+              </span>
+            </div>
+            <div>
+              <h1 className="logo-title">Quizze</h1>
+              <p className="logo-subtitle">Minimal quiz operations for teams and learners.</p>
+            </div>
+          </div>
+
+          <div className="auth-copy">
+            <div className="eyebrow">Focused workflow</div>
+            <h2>Sign in, take quizzes, review outcomes.</h2>
+            <p>A minimal interface for authentication, quiz attempts, reporting, and administration.</p>
+          </div>
+        </section>
+
+        <Card className="auth-card">
+          <h2 className="section-title">{isRegister ? "Create your account" : "Welcome back"}</h2>
+          <p className="section-copy">
+            {isRegister
+              ? "Create a new account to start taking quizzes."
+              : "Enter your credentials to access your workspace."}
+          </p>
+
+          <form className="form-grid" onSubmit={handleSubmit}>
+            {isRegister ? (
+              <div className="split-row">
+                <Field label="First Name" name="firstName" placeholder="Niranjan" />
+                <Field label="Last Name" name="lastName" placeholder="Kumar" />
+              </div>
+            ) : null}
+
+            <Field
+              icon={isRegister ? "mail" : "person"}
+              label={isRegister ? "Email Address" : "Username or Email"}
+              name={isRegister ? "email" : "usernameOrEmail"}
+              placeholder={isRegister ? "name@example.com" : "niranjan"}
+            />
+
+            {isRegister ? <Field icon="alternate_email" label="Username" name="username" placeholder="niranjan" /> : null}
+            {isRegister ? <Field icon="verified" label="Email Confirmation" name="confirmEmail" placeholder="Repeat your email" /> : null}
+            <Field icon="lock" label="Password" name="password" placeholder="Password123" type="password" />
+
+            <Button className="primary-btn" disabled={loading} type="submit">
+              {loading ? "Please wait..." : isRegister ? "Create Account" : "Sign In"}
+            </Button>
+          </form>
+
+          <div className="auth-toggle">
+            {isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
+            <button onClick={() => setMode(isRegister ? "login" : "register")} type="button">
+              {isRegister ? "Sign In" : "Create an account"}
+            </button>
+          </div>
+        </Card>
+      </main>
+    </div>
+  );
+}
+
+function QuizCard({ quiz }) {
+  return (
+    <article className="quiz-card">
+      <div className="quiz-card-header">
+        <span className="tag">{quiz.categoryName || quiz.difficulty || "Quiz"}</span>
+        <span className="tiny muted">{quiz.timeLimitInMinutes} min</span>
+      </div>
+      <div className="quiz-card-body">
+        <div>
+          <h4>{quiz.title}</h4>
+          <p className="muted">{quiz.description || "A focused assessment with automatic scoring and a clean attempt flow."}</p>
+        </div>
+        <div className="helper-row">
+          <div className="tiny muted">{quiz.questionCount} questions</div>
+          <Link className="btn primary-btn" to={`/quizzes/${quiz.id}`}>
+            Open
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function DashboardPage({ auth, setError, setMessage }) {
+  const [quizzes, setQuizzes] = useState([]);
+  const [attemptHistory, setAttemptHistory] = useState([]);
+  const [resultHistory, setResultHistory] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.all([
+      apiRequest("/api/quizzes", {}, auth.token),
+      apiRequest("/api/users/me/attempts", {}, auth.token),
+      apiRequest("/api/users/me/results", {}, auth.token),
+    ])
+      .then(([quizData, attemptData, resultData]) => {
+        if (cancelled) return;
+        setQuizzes(quizData);
+        setAttemptHistory(attemptData);
+        setResultHistory(resultData);
+        setError("");
+        setMessage("");
+      })
+      .catch((loadError) => {
+        if (!cancelled) {
+          setError(loadError.message);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.token, setError, setMessage]);
+
+  const avgPct = resultHistory.length
+    ? Math.round(resultHistory.reduce((sum, item) => sum + (item.percentage || 0), 0) / resultHistory.length)
+    : 0;
+
+  return (
+    <>
+      <section className="hero">
+        <div>
+          <h2>Welcome back, {auth.user?.username}.</h2>
+          <p>Track quiz activity, review results, and continue where you left off in a calm focused workspace.</p>
+        </div>
+      </section>
+
+      <section className="stats-grid">
+        <article className="stat-card">
+          <div className="stat-label">Quizzes Attempted</div>
+          <div className="stat-value accent-primary">{attemptHistory.length}</div>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">Average Score</div>
+          <div className="stat-value accent-success">{avgPct}%</div>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">Available Quizzes</div>
+          <div className="stat-value">{quizzes.length}</div>
+        </article>
+      </section>
+
+      <section className="dashboard-grid">
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">Available Quizzes</h3>
+            <Link className="text-btn" to="/quizzes">
+              View all
+            </Link>
+          </div>
+          <div className="cards-grid">
+            {quizzes.slice(0, 2).map((quiz) => (
+              <QuizCard key={quiz.id} quiz={quiz} />
+            ))}
+            {!quizzes.length ? <div className="empty-state">No published quizzes yet. Ask an admin to publish one.</div> : null}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">Progress</h3>
+            <span className="tag alt">Level {Math.max(1, attemptHistory.length + 3)}</span>
+          </div>
+          <div className="progress-shell">
+            <div className="helper-row tiny muted">
+              <span>Average performance</span>
+              <span>{Math.min(100, avgPct || 12)}%</span>
+            </div>
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${Math.min(100, avgPct || 12)}%` }} />
+            </div>
+            <div className="muted">A quick snapshot of how your submitted quiz scores are trending.</div>
+          </div>
+
+          <div className="section-separator" />
+
+          <div className="panel-title-row compact">
+            <h4 className="panel-title">Recent Results</h4>
+          </div>
+          <div className="list">
+            {resultHistory.slice(0, 4).map((result) => (
+              <div className="list-item" key={result.attemptId}>
+                <div className="list-title">{result.quizTitle}</div>
+                <div className="muted tiny">{Math.round(result.percentage || 0)}% score | {result.correctAnswers} correct</div>
+              </div>
+            ))}
+            {!resultHistory.length ? <div className="empty-state">No submitted quiz results yet.</div> : null}
+          </div>
+        </Card>
+      </section>
+    </>
+  );
+}
+
+function QuizLibraryPage({ auth, setError }) {
+  const [quizzes, setQuizzes] = useState([]);
+
+  useEffect(() => {
+    apiRequest("/api/quizzes", {}, auth.token)
+      .then(setQuizzes)
+      .catch((loadError) => setError(loadError.message));
+  }, [auth.token, setError]);
+
+  return (
+    <>
+      <section className="hero">
+        <div>
+          <h2>Quiz Library</h2>
+          <p>Browse published quizzes, review the key details, and start an attempt when you are ready.</p>
+        </div>
+      </section>
+
+      <section className="cards-grid">
+        {quizzes.map((quiz) => (
+          <QuizCard key={quiz.id} quiz={quiz} />
+        ))}
+        {!quizzes.length ? <Card className="empty-state">No published quizzes available.</Card> : null}
+      </section>
+    </>
+  );
+}
+
+function QuizDetailPage({ auth, setError, setMessage }) {
+  const { quizId } = useParams();
+  const navigate = useNavigate();
+  const [quiz, setQuiz] = useState(null);
+  const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    apiRequest(`/api/quizzes/${quizId}`, {}, auth.token)
+      .then((data) => {
+        setQuiz(data);
+        setError("");
+      })
+      .catch((loadError) => setError(loadError.message));
+  }, [auth.token, quizId, setError]);
+
+  async function startQuiz() {
+    setStarting(true);
+    try {
+      const attempt = await apiRequest(`/api/quizzes/${quizId}/start`, { method: "POST" }, auth.token);
+      setMessage("Quiz attempt started successfully.");
+      navigate(`/attempts/${attempt.attemptId}`);
+    } catch (startError) {
+      setError(startError.message);
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  if (!quiz) {
+    return <Card>Loading quiz details...</Card>;
+  }
+
+  return (
+    <Card className="detail-card">
+      <div className="hero">
+        <div>
+          <span className="tag">{quiz.categoryName || quiz.difficulty}</span>
+          <h2 style={{ marginTop: 16 }}>{quiz.title}</h2>
+          <p>{quiz.description || "A structured quiz with time limits, multiple questions, and automatic scoring."}</p>
+        </div>
+        <Card className="detail-summary">
+          <div className="list">
+            <div>
+              <div className="stat-label">Difficulty</div>
+              <div className="detail-value">{quiz.difficulty}</div>
+            </div>
+            <div>
+              <div className="stat-label">Duration</div>
+              <div className="detail-value">{quiz.timeLimitInMinutes} Minutes</div>
+            </div>
+            <div>
+              <div className="stat-label">Questions</div>
+              <div className="detail-value">{quiz.questionCount}</div>
+            </div>
+            <Button className="primary-btn" disabled={starting} onClick={startQuiz} type="button">
+              {starting ? "Preparing..." : "Start Quiz"}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    </Card>
+  );
+}
+
+function AttemptPage({ auth, setError, setMessage }) {
+  const { attemptId } = useParams();
+  const navigate = useNavigate();
+  const [questions, setQuestions] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    apiRequest(`/api/quizzes/attempts/${attemptId}/questions`, {}, auth.token)
+      .then((data) => {
+        setQuestions(data);
+        setError("");
+      })
+      .catch((loadError) => setError(loadError.message));
+  }, [attemptId, auth.token, setError]);
+
+  if (!questions.length) {
+    return <Card>Loading attempt questions...</Card>;
+  }
+
+  const question = questions[currentIndex];
+  const progress = ((currentIndex + 1) / questions.length) * 100;
+
+  async function submitQuiz() {
+    const unanswered = questions.find((item) => !answers[item.id]);
+    if (unanswered) {
+      setError("Answer every question before submitting.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await apiRequest(
+        `/api/quizzes/attempts/${attemptId}/submit`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            answers: questions.map((item) => ({
+              questionId: item.id,
+              selectedOptionId: answers[item.id],
+            })),
+          }),
+        },
+        auth.token,
+      );
+
+      setMessage("Quiz submitted successfully.");
+      navigate(`/results/${attemptId}`);
+    } catch (submitError) {
+      setError(submitError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="quiz-screen">
+      <section className="hero">
+        <div>
+          <span className="tag">
+            Question {currentIndex + 1} of {questions.length}
+          </span>
+          <h2 style={{ marginTop: 16 }}>{question.content}</h2>
+        </div>
+        <div className="progress-panel">
+          <div className="helper-row tiny muted">
+            <span>Progress</span>
+            <span>{Math.round(progress)}%</span>
+          </div>
+          <div className="progress-track">
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      </section>
+
+      <section className="question-grid">
+        {question.options.map((option, index) => {
+          const selected = answers[question.id] === option.id;
+          return (
+            <button
+              className={`option-btn${selected ? " selected" : ""}`}
+              key={option.id}
+              onClick={() => setAnswers((current) => ({ ...current, [question.id]: option.id }))}
+              type="button"
+            >
+              <span className="option-badge">{String.fromCharCode(65 + index)}</span>
+              <div className="option-title">{option.content}</div>
+            </button>
+          );
+        })}
+      </section>
+
+      <div className="helper-row action-row">
+        <Button className="ghost-btn" disabled={currentIndex === 0} onClick={() => setCurrentIndex((value) => Math.max(0, value - 1))} type="button">
+          Previous
+        </Button>
+        {currentIndex === questions.length - 1 ? (
+          <Button className="primary-btn" disabled={submitting} onClick={submitQuiz} type="button">
+            {submitting ? "Submitting..." : "Submit Quiz"}
+          </Button>
+        ) : (
+          <Button
+            className="primary-btn"
+            onClick={() => {
+              if (!answers[question.id]) {
+                setError("Select an option before moving forward.");
+                return;
+              }
+              setError("");
+              setCurrentIndex((value) => Math.min(questions.length - 1, value + 1));
+            }}
+            type="button"
+          >
+            Next
+          </Button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function HistoryPage({ auth, setError }) {
+  const [attempts, setAttempts] = useState([]);
+
+  useEffect(() => {
+    apiRequest("/api/users/me/attempts", {}, auth.token)
+      .then(setAttempts)
+      .catch((loadError) => setError(loadError.message));
+  }, [auth.token, setError]);
+
+  return (
+    <Card>
+      <div className="panel-title-row">
+        <h3 className="panel-title">Attempt History</h3>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Quiz</th>
+              <th>Status</th>
+              <th>Score</th>
+              <th>Percentage</th>
+              <th>Submitted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {attempts.map((item) => (
+              <tr key={item.attemptId}>
+                <td>{item.quizTitle}</td>
+                <td>{item.status}</td>
+                <td>
+                  {item.score ?? 0} / {item.maxScore ?? 0}
+                </td>
+                <td>{Math.round(item.percentage || 0)}%</td>
+                <td>{item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "-"}</td>
+              </tr>
+            ))}
+            {!attempts.length ? (
+              <tr>
+                <td className="muted" colSpan={5}>
+                  No attempts yet.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function ResultsPage({ auth, setError }) {
+  const [results, setResults] = useState([]);
+
+  useEffect(() => {
+    apiRequest("/api/users/me/results", {}, auth.token)
+      .then(setResults)
+      .catch((loadError) => setError(loadError.message));
+  }, [auth.token, setError]);
+
+  return (
+    <Card>
+      <div className="panel-title-row">
+        <h3 className="panel-title">Result History</h3>
+      </div>
+      <div className="list">
+        {results.map((item) => (
+          <div className="list-item helper-row" key={item.attemptId}>
+            <div>
+              <div className="list-title">{item.quizTitle}</div>
+              <div className="muted tiny">
+                {Math.round(item.percentage || 0)}% | {item.correctAnswers} correct | {new Date(item.submittedAt).toLocaleString()}
+              </div>
+            </div>
+            <Link className="btn primary-btn" to={`/results/${item.attemptId}`}>
+              Review
+            </Link>
+          </div>
+        ))}
+        {!results.length ? <div className="empty-state">No submitted results yet.</div> : null}
+      </div>
+    </Card>
+  );
+}
+
+function ResultDetailPage({ auth, setError }) {
+  const { attemptId } = useParams();
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    apiRequest(`/api/quizzes/attempts/${attemptId}/result`, {}, auth.token)
+      .then(setResult)
+      .catch((loadError) => setError(loadError.message));
+  }, [attemptId, auth.token, setError]);
+
+  if (!result) {
+    return <Card>Loading result summary...</Card>;
+  }
+
+  const scorePct = Math.round(result.percentage || 0);
+
+  return (
+    <section className="result-grid">
+      <Card>
+        <h2 className="result-heading">Quiz Completed</h2>
+        <p className="muted">{result.quizTitle}</p>
+
+        <div className="result-score-block">
+          <div className="score-box">
+            <div className="score-box-value">{scorePct}%</div>
+            <div className="tiny muted">Overall score</div>
+          </div>
+          <div className="list result-summary-list">
+            <div>
+              <strong>{result.score}</strong> / {result.maxScore} points
+            </div>
+            <div>
+              <strong>{result.correctAnswers}</strong> correct answers
+            </div>
+            <div>
+              <strong>{result.wrongAnswers}</strong> wrong answers
+            </div>
+          </div>
+        </div>
+
+        <div className="stats-grid result-stats">
+          <div className="stat-card">
+            <div className="stat-label">Attempted</div>
+            <div className="stat-value result-stat-value">{result.attemptedQuestions}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Correct</div>
+            <div className="stat-value result-stat-value accent-success">{result.correctAnswers}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Wrong</div>
+            <div className="stat-value result-stat-value accent-secondary">{result.wrongAnswers}</div>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="panel-title-row">
+          <h3 className="panel-title">Review Answers</h3>
+          <Link className="btn ghost-btn" to="/results">
+            Back
+          </Link>
+        </div>
+        <div className="list">
+          {result.answers.map((answer) => (
+            <div className={`review-item${answer.correct ? "" : " incorrect"}`} key={answer.questionId}>
+              <div className="helper-row">
+                <span className="stat-label">Question {answer.questionId}</span>
+                <span className={`badge ${answer.correct ? "live" : "draft"}`}>{answer.correct ? "Correct" : "Incorrect"}</span>
+              </div>
+              <div className="review-question">{answer.questionContent}</div>
+              <div className={answer.correct ? "notice" : "error-banner"} style={{ marginTop: 14 }}>
+                Your answer: {answer.selectedOptionContent || "No answer"}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+function AdminPage({ auth, setError, setMessage }) {
+  const [quizzes, setQuizzes] = useState([]);
+  const [mode, setMode] = useState("create");
+  const [activeQuiz, setActiveQuiz] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  async function loadQuizzes() {
+    try {
+      const data = await apiRequest("/api/admin/quizzes", {}, auth.token);
+      setQuizzes(data);
+      setError("");
+    } catch (loadError) {
+      setError(loadError.message);
+    }
+  }
+
+  useEffect(() => {
+    loadQuizzes();
+  }, [auth.token]);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const body = {
+      title: formData.get("title"),
+      description: formData.get("description"),
+      categoryName: formData.get("categoryName"),
+      difficulty: formData.get("difficulty"),
+      timeLimitInMinutes: Number(formData.get("timeLimitInMinutes")),
+      published: formData.get("published") === "on",
+      negativeMarkingEnabled: false,
+      oneAttemptOnly: formData.get("oneAttemptOnly") === "on",
+    };
+
+    setSaving(true);
+    try {
+      if (mode === "edit" && activeQuiz?.id) {
+        await apiRequest(`/api/admin/quizzes/${activeQuiz.id}`, { method: "PUT", body: JSON.stringify(body) }, auth.token);
+        setMessage("Quiz updated successfully.");
+      } else {
+        await apiRequest("/api/admin/quizzes", { method: "POST", body: JSON.stringify(body) }, auth.token);
+        setMessage("Quiz created successfully.");
+      }
+
+      setMode("create");
+      setActiveQuiz(null);
+      await loadQuizzes();
+    } catch (submitError) {
+      setError(submitError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(quizId) {
+    if (!window.confirm("Delete this quiz?")) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/api/admin/quizzes/${quizId}`, { method: "DELETE" }, auth.token);
+      setMessage("Quiz deleted successfully.");
+      await loadQuizzes();
+    } catch (deleteError) {
+      setError(deleteError.message);
+    }
+  }
+
+  return (
+    <>
+      <section className="hero">
+        <div>
+          <h2>Admin Dashboard</h2>
+          <p>Manage quizzes, review publication state, and keep the content catalog organized.</p>
+        </div>
+      </section>
+
+      <section className="metric-grid">
+        <article className="stat-card">
+          <div className="stat-label">Published</div>
+          <div className="stat-value accent-primary">{quizzes.filter((quiz) => quiz.published).length}</div>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">Drafts</div>
+          <div className="stat-value accent-secondary">{quizzes.filter((quiz) => !quiz.published).length}</div>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">Total Quizzes</div>
+          <div className="stat-value">{quizzes.length}</div>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">Role</div>
+          <div className="stat-value admin-role-value">{auth.user?.role}</div>
+        </article>
+      </section>
+
+      <section className="dashboard-grid admin-layout">
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">{mode === "edit" ? "Edit Quiz" : "Create New Quiz"}</h3>
+          </div>
+          <form className="form-grid" onSubmit={handleSubmit}>
+            <Field defaultValue={activeQuiz?.title || ""} label="Quiz Title" name="title" placeholder="Java Basics" />
+            <Field
+              as="textarea"
+              defaultValue={activeQuiz?.description || ""}
+              label="Description"
+              name="description"
+              placeholder="Fundamentals of Java programming"
+              required={false}
+            />
+
+            <div className="split-row">
+              <Field defaultValue={activeQuiz?.categoryName || ""} label="Category" name="categoryName" placeholder="Programming" required={false} />
+              <div className="field">
+                <label className="field-label">Difficulty</label>
+                <div className="field-shell">
+                  <select className="field-input field-select" defaultValue={activeQuiz?.difficulty || "MEDIUM"} name="difficulty">
+                    <option value="EASY">EASY</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HARD">HARD</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="split-row admin-form-row">
+              <Field
+                defaultValue={activeQuiz?.timeLimitInMinutes ?? 15}
+                label="Time Limit"
+                max="300"
+                min="0"
+                name="timeLimitInMinutes"
+                type="number"
+              />
+              <div className="check-grid">
+                <label className="checkbox-label">
+                  <input defaultChecked={Boolean(activeQuiz?.published)} name="published" type="checkbox" />
+                  <span>Published</span>
+                </label>
+                <label className="checkbox-label">
+                  <input defaultChecked={Boolean(activeQuiz?.oneAttemptOnly)} name="oneAttemptOnly" type="checkbox" />
+                  <span>One Attempt Only</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="helper-row">
+              <Button className="primary-btn" disabled={saving} type="submit">
+                {saving ? "Saving..." : mode === "edit" ? "Update Quiz" : "Create Quiz"}
+              </Button>
+              {mode === "edit" ? (
+                <Button
+                  className="ghost-btn"
+                  onClick={() => {
+                    setMode("create");
+                    setActiveQuiz(null);
+                  }}
+                  type="button"
+                >
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </Card>
+
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">Manage Quizzes</h3>
+          </div>
+          <div className="list">
+            {quizzes.map((quiz) => (
+              <div className="list-item helper-row" key={quiz.id}>
+                <div>
+                  <div className="list-title">{quiz.title}</div>
+                  <div className="muted tiny">
+                    {quiz.categoryName || "Uncategorized"} | {quiz.questionCount} questions | {quiz.published ? "Published" : "Draft"}
+                  </div>
+                </div>
+                <div className="action-group">
+                  <Button
+                    className="secondary-btn"
+                    onClick={() => {
+                      setMode("edit");
+                      setActiveQuiz(quiz);
+                    }}
+                    type="button"
+                  >
+                    Edit
+                  </Button>
+                  <Button className="ghost-btn" onClick={() => handleDelete(quiz.id)} type="button">
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {!quizzes.length ? <div className="empty-state">No quizzes created yet.</div> : null}
+          </div>
+        </Card>
+      </section>
+    </>
+  );
+}
