@@ -1,0 +1,49 @@
+# Maven
+target/
+.mvn/wrapper/maven-wrapper.jar
+
+# Build outputs
+build/
+out/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs and editors
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+replay_pid*
+
+# Environment and local config
+.env
+.env.*
+!.env.example
+application-local.properties
+application-dev.properties
+Online Quiz Platform using Spring Boot.md
+
+# Test and coverage artifacts
+coverage/
+.jacoco/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
