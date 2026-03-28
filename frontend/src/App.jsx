@@ -192,6 +192,7 @@ export default function App() {
 
 function ProtectedLayout({ auth, message, setMessage, error, setError }) {
   const navigate = useNavigate();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   if (!auth.isAuthenticated) {
     return <Navigate to="/auth" replace />;
@@ -216,7 +217,6 @@ function ProtectedLayout({ auth, message, setMessage, error, setError }) {
     <div className="layout">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">Q</div>
           <div>
             <h1>Quizze</h1>
             <p>Assessment workspace</p>
@@ -233,47 +233,53 @@ function ProtectedLayout({ auth, message, setMessage, error, setError }) {
         </nav>
 
         <div className="sidebar-profile">
-          <div className="avatar">{initials(auth.user?.username)}</div>
           <div>
             <div className="profile-name">{auth.user?.username}</div>
-            <div className="muted tiny">{auth.user?.role}</div>
           </div>
+          <Button
+            className="ghost-btn sidebar-logout"
+            onClick={() => setShowLogoutConfirm(true)}
+            type="button"
+          >
+            Logout
+          </Button>
         </div>
       </aside>
 
       <div className="main">
-        <header className="topbar">
-          <div className="topbar-title">
-            <div className="eyebrow">Workspace</div>
-            <div className="topbar-heading">{auth.user?.role === "ADMIN" ? "Admin console" : "Learning dashboard"}</div>
-          </div>
-
-          <div className="topbar-actions">
-            <div className="topbar-user">
-              <div className="topbar-user-name">{auth.user?.username}</div>
-              <div className="muted tiny">{auth.user?.email}</div>
-            </div>
-            <Button
-              className="ghost-btn"
-              onClick={() => {
-                auth.logout();
-                setError("");
-                setMessage("");
-                navigate("/auth", { replace: true });
-              }}
-              type="button"
-            >
-              Logout
-            </Button>
-          </div>
-        </header>
-
         <main className="canvas">
           {error ? <div className="error-banner">{error}</div> : null}
           {message ? <div className="notice">{message}</div> : null}
           <Outlet />
         </main>
       </div>
+
+      {showLogoutConfirm ? (
+        <div className="modal-backdrop" onClick={() => setShowLogoutConfirm(false)} role="presentation">
+          <div className="modal-card" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="logout-title">
+            <h3 className="panel-title" id="logout-title">Log out?</h3>
+            <p className="muted modal-copy">You’ll need to sign in again to continue your quiz session and dashboard access.</p>
+            <div className="action-group modal-actions">
+              <Button className="ghost-btn" onClick={() => setShowLogoutConfirm(false)} type="button">
+                Cancel
+              </Button>
+              <Button
+                className="primary-btn"
+                onClick={() => {
+                  auth.logout();
+                  setError("");
+                  setMessage("");
+                  setShowLogoutConfirm(false);
+                  navigate("/auth", { replace: true });
+                }}
+                type="button"
+              >
+                Logout
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
