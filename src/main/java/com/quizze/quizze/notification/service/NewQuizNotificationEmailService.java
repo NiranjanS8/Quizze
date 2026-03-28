@@ -3,6 +3,7 @@ package com.quizze.quizze.notification.service;
 import com.quizze.quizze.notification.config.MailProperties;
 import com.quizze.quizze.notification.config.NewQuizNotificationProperties;
 import com.quizze.quizze.notification.kafka.NewQuizPublishedMessage;
+import com.quizze.quizze.monitoring.service.ApplicationMetricsService;
 import com.quizze.quizze.user.domain.User;
 import com.quizze.quizze.user.repository.UserRepository;
 import jakarta.mail.MessagingException;
@@ -28,6 +29,7 @@ public class NewQuizNotificationEmailService {
     private final MailProperties mailProperties;
     private final NewQuizNotificationProperties properties;
     private final UserRepository userRepository;
+    private final ApplicationMetricsService metricsService;
 
     public void notifyOptedInUsers(NewQuizPublishedMessage message) {
         if (!mailProperties.isEnabled()) {
@@ -45,6 +47,8 @@ public class NewQuizNotificationEmailService {
                 return;
             }
 
+            metricsService.increment("quizze.notification.new_quiz.batch.processed");
+            metricsService.increment("quizze.notification.new_quiz.recipient.processed", batch.size());
             sendBatch(batch, message);
             page++;
         }
@@ -57,8 +61,11 @@ public class NewQuizNotificationEmailService {
                 messages.add(buildMessage(user, message));
             }
             mailSender.send(messages.toArray(MimeMessage[]::new));
+            metricsService.increment("quizze.notification.new_quiz.batch.sent");
+            metricsService.increment("quizze.notification.new_quiz.email.sent", users.size());
             log.info("Sent new quiz notification batch for quizId={} to {} opted-in users", message.quizId(), users.size());
         } catch (MailException | MessagingException | UnsupportedEncodingException ex) {
+            metricsService.increment("quizze.notification.new_quiz.batch.failed");
             log.warn(
                     "Batch send failed for new quiz notification quizId={}. Falling back to per-user send. Reason: {}",
                     message.quizId(),
@@ -73,6 +80,7 @@ public class NewQuizNotificationEmailService {
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 mailSender.send(buildMessage(user, message));
+                metricsService.increment("quizze.notification.new_quiz.email.sent");
                 log.info(
                         "Sent new quiz notification for quizId={} to userId={} on attempt {}",
                         message.quizId(),
@@ -82,6 +90,7 @@ public class NewQuizNotificationEmailService {
                 return;
             } catch (MailException | MessagingException | UnsupportedEncodingException ex) {
                 if (attempt == maxAttempts) {
+                    metricsService.increment("quizze.notification.new_quiz.email.failed");
                     log.warn(
                             "New quiz notification failed for userId={} and quizId={} after {} attempts. Reason: {}",
                             user.getId(),

@@ -19,4 +19,8 @@ public class ApplicationMetricsService {
     public void increment(String metricName) {
         counters.computeIfAbsent(metricName, name -> Counter.builder(name).register(meterRegistry)).increment();
     }
+
+    public void increment(String metricName, double amount) {
+        counters.computeIfAbsent(metricName, name -> Counter.builder(name).register(meterRegistry)).increment(amount);
+    }
 }

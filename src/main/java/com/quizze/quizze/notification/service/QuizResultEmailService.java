@@ -3,6 +3,7 @@ package com.quizze.quizze.notification.service;
 import com.quizze.quizze.notification.config.MailProperties;
 import com.quizze.quizze.notification.config.QuizResultNotificationProperties;
 import com.quizze.quizze.notification.kafka.QuizSubmittedMessage;
+import com.quizze.quizze.monitoring.service.ApplicationMetricsService;
 import com.quizze.quizze.quiz.domain.QuizAttempt;
 import com.quizze.quizze.quiz.repository.QuizAttemptRepository;
 import jakarta.mail.MessagingException;
@@ -25,6 +26,7 @@ public class QuizResultEmailService {
     private final MailProperties mailProperties;
     private final QuizResultNotificationProperties properties;
     private final QuizAttemptRepository quizAttemptRepository;
+    private final ApplicationMetricsService metricsService;
 
     public void sendResultSummary(QuizSubmittedMessage message) {
         if (!mailProperties.isEnabled()) {
@@ -42,10 +44,12 @@ public class QuizResultEmailService {
         for (int attemptNumber = 1; attemptNumber <= maxAttempts; attemptNumber++) {
             try {
                 mailSender.send(buildMessage(attempt));
+                metricsService.increment("quizze.notification.quiz_result.email.sent");
                 log.info("Quiz result email sent for attemptId={} on attempt {}", message.attemptId(), attemptNumber);
                 return;
             } catch (MailException | MessagingException | UnsupportedEncodingException ex) {
                 if (attemptNumber == maxAttempts) {
+                    metricsService.increment("quizze.notification.quiz_result.email.failed");
                     log.warn(
                             "Quiz result email failed for attemptId={} after {} attempts. Reason: {}",
                             message.attemptId(),

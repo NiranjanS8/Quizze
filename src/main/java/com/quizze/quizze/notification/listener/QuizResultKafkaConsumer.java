@@ -2,6 +2,7 @@ package com.quizze.quizze.notification.listener;
 
 import com.quizze.quizze.notification.kafka.QuizSubmittedMessage;
 import com.quizze.quizze.notification.service.QuizResultEmailService;
+import com.quizze.quizze.monitoring.service.ApplicationMetricsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
 public class QuizResultKafkaConsumer {
 
     private final QuizResultEmailService quizResultEmailService;
+    private final ApplicationMetricsService metricsService;
 
     @KafkaListener(
             topics = "${app.notifications.quiz-result.topic}",
@@ -23,9 +25,11 @@ public class QuizResultKafkaConsumer {
     )
     public void consume(@Payload QuizSubmittedMessage message) {
         try {
+            metricsService.increment("quizze.kafka.quiz_result.consume.success");
             log.info("Consuming quiz submitted message for attemptId={}", message.attemptId());
             quizResultEmailService.sendResultSummary(message);
         } catch (Exception ex) {
+            metricsService.increment("quizze.kafka.quiz_result.consume.failed");
             log.warn(
                     "Quiz result consumer failed for attemptId={}. Message will not crash the consumer. Reason: {}",
                     message.attemptId(),

@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: "Quizze Dashboards"
+    orgId: 1
+    folder: "Quizze"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
