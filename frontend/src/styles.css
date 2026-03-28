@@ -597,6 +597,10 @@ button {
 
 .progress-panel {
   width: min(100%, 260px);
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
 }
 
 .progress-track {
@@ -628,6 +632,11 @@ button {
   background: var(--surface-1);
 }
 
+.leaderboard-item.current-user {
+  border-color: var(--success);
+  background: rgba(190, 215, 84, 0.08);
+}
+
 .leaderboard-rank {
   display: grid;
   place-items: center;
@@ -646,6 +655,22 @@ button {
 .leaderboard-score {
   font-weight: 700;
   color: var(--text);
+}
+
+.leaderboard-you {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(190, 215, 84, 0.14);
+  color: var(--success);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .detail-card {
@@ -687,15 +712,19 @@ button {
   gap: 14px;
   padding: 18px;
   text-align: left;
+  color: var(--text);
+  background: var(--surface-1);
 }
 
 .option-btn:hover {
   border-color: var(--secondary);
+  background: var(--surface-2);
 }
 
 .option-btn.selected {
   border-color: var(--primary);
-  background: rgba(117, 14, 33, 0.16);
+  background: rgba(117, 14, 33, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(117, 14, 33, 0.4);
 }
 
 .option-badge {
@@ -720,6 +749,8 @@ button {
 .option-title {
   font-size: 15px;
   font-weight: 600;
+  color: var(--text);
+  line-height: 1.45;
 }
 
 .action-row {
@@ -881,7 +912,7 @@ tbody tr {
 
 .attempt-quiz-title {
   margin: 12px 0 0;
-  color: var(--text-muted);
+  color: #c6c6c6;
   font-size: 14px;
   font-weight: 500;
 }

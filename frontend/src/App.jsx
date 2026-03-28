@@ -824,10 +824,16 @@ function QuizDetailPage({ auth, setError, setMessage }) {
         </div>
         <div className="list">
           {leaderboard?.entries?.map((entry) => (
-            <div className="leaderboard-item" key={`${entry.rank}-${entry.userId}-${entry.submittedAt}`}>
+            <div
+              className={`leaderboard-item${entry.userId === auth.user?.id ? " current-user" : ""}`}
+              key={`${entry.rank}-${entry.userId}-${entry.submittedAt}`}
+            >
               <div className="leaderboard-rank">#{entry.rank}</div>
               <div className="leaderboard-meta">
-                <div className="list-title">{entry.username}</div>
+                <div className="list-title">
+                  {entry.username}
+                  {entry.userId === auth.user?.id ? <span className="leaderboard-you">You</span> : null}
+                </div>
                 <div className="muted tiny">
                   {Math.round(entry.percentage || 0)}% | {entry.correctAnswers} correct | {new Date(entry.submittedAt).toLocaleString()}
                 </div>
@@ -887,7 +893,8 @@ function AttemptPage({ auth, setError, setMessage }) {
 
   const questions = attemptData.questions;
   const question = questions[currentIndex];
-  const progress = ((currentIndex + 1) / questions.length) * 100;
+  const answeredCount = questions.filter((item) => Boolean(answers[item.id])).length;
+  const progress = questions.length ? (answeredCount / questions.length) * 100 : 0;
 
   async function submitQuiz(autoSubmitted = false) {
     setSubmitting(true);
@@ -933,8 +940,8 @@ function AttemptPage({ auth, setError, setMessage }) {
             <span className={timeLeft === "00:00" ? "accent-secondary" : "accent-success"}>{timeLeft || "No limit"}</span>
           </div>
           <div className="helper-row tiny muted">
-            <span>Progress</span>
-            <span>{Math.round(progress)}%</span>
+            <span>Answered</span>
+            <span>{answeredCount} / {questions.length}</span>
           </div>
           <div className="progress-track">
             <div className="progress-fill" style={{ width: `${progress}%` }} />
