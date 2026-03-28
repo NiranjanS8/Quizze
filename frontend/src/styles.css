@@ -171,6 +171,15 @@ button {
 .empty-state {
   color: var(--text-muted);
   padding: 12px 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  min-height: 120px;
+}
+
+.empty-state-card {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 .helper-row,
@@ -301,6 +310,7 @@ button {
 
 .field {
   min-width: 0;
+  position: relative;
 }
 
 .field-shell {
@@ -340,6 +350,71 @@ button {
 
 .field-input:focus {
   border-color: var(--secondary);
+}
+
+.custom-select-trigger {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+}
+
+.custom-select-trigger.open {
+  border-color: var(--secondary);
+}
+
+.custom-select-placeholder {
+  color: var(--text-muted);
+}
+
+.custom-select-value {
+  color: var(--text);
+}
+
+.custom-select-icon {
+  color: var(--text-muted);
+  font-size: 20px;
+}
+
+.custom-select-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+
+.custom-select-option {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+}
+
+.custom-select-option:hover {
+  background: var(--surface-2);
+}
+
+.custom-select-option.selected {
+  background: rgba(117, 14, 33, 0.24);
+  color: var(--text);
 }
 
 .auth-toggle {

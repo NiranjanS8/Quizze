@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Link,
   Navigate,
@@ -119,6 +119,60 @@ function Field({ icon, label, name, placeholder, type = "text", as = "input", de
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function CustomSelect({ label, name, value, onChangeValue, options, placeholder = "Select option" }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    function handlePointerDown(event) {
+      if (rootRef.current && !rootRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  const selectedOption = options.find((option) => option.value === value);
+
+  return (
+    <div className="field" ref={rootRef}>
+      {label ? <label className="field-label">{label}</label> : null}
+      <input name={name} type="hidden" value={value || ""} />
+      <button
+        aria-expanded={open}
+        className={`custom-select-trigger${open ? " open" : ""}`}
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span className={selectedOption ? "custom-select-value" : "custom-select-placeholder"}>
+          {selectedOption?.label || placeholder}
+        </span>
+        <span className="material-symbols-outlined custom-select-icon">expand_more</span>
+      </button>
+
+      {open ? (
+        <div className="custom-select-menu" role="listbox">
+          {options.map((option) => (
+            <button
+              className={`custom-select-option${option.value === value ? " selected" : ""}`}
+              key={`${name}-${option.value}`}
+              onClick={() => {
+                onChangeValue(option.value);
+                setOpen(false);
+              }}
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -665,6 +719,20 @@ function QuizLibraryPage({ auth, setError }) {
     }));
   }
 
+  const categoryOptions = [{ value: "", label: "All categories" }, ...availableCategories.map((category) => ({ value: category, label: category }))];
+  const difficultyOptions = [
+    { value: "", label: "All levels" },
+    { value: "EASY", label: "EASY" },
+    { value: "MEDIUM", label: "MEDIUM" },
+    { value: "HARD", label: "HARD" },
+  ];
+  const sortOptions = [
+    { value: "createdAt:desc", label: "Newest first" },
+    { value: "title:asc", label: "Title A-Z" },
+    { value: "difficulty:asc", label: "Difficulty" },
+    { value: "timeLimitInMinutes:asc", label: "Shortest time" },
+  ];
+
   return (
     <>
       <section className="hero">
@@ -684,44 +752,18 @@ function QuizLibraryPage({ auth, setError }) {
             value={filters.search}
             onChange={(event) => updateFilter("search", event.target.value)}
           />
-          <div className="field">
-            <label className="field-label">Category</label>
-            <div className="field-shell">
-              <select className="field-input field-select" value={filters.category} onChange={(event) => updateFilter("category", event.target.value)}>
-                <option value="">All categories</option>
-                {availableCategories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="field">
-            <label className="field-label">Difficulty</label>
-            <div className="field-shell">
-              <select className="field-input field-select" value={filters.difficulty} onChange={(event) => updateFilter("difficulty", event.target.value)}>
-                <option value="">All levels</option>
-                <option value="EASY">EASY</option>
-                <option value="MEDIUM">MEDIUM</option>
-                <option value="HARD">HARD</option>
-              </select>
-            </div>
-          </div>
-          <div className="field">
-            <label className="field-label">Sort</label>
-            <div className="field-shell">
-              <select className="field-input field-select" value={`${filters.sortBy}:${filters.sortDir}`} onChange={(event) => {
-                const [sortBy, sortDir] = event.target.value.split(":");
-                setFilters((current) => ({ ...current, sortBy, sortDir, page: 0 }));
-              }}>
-                <option value="createdAt:desc">Newest first</option>
-                <option value="title:asc">Title A-Z</option>
-                <option value="difficulty:asc">Difficulty</option>
-                <option value="timeLimitInMinutes:asc">Shortest time</option>
-              </select>
-            </div>
-          </div>
+          <CustomSelect label="Category" name="category" onChangeValue={(nextValue) => updateFilter("category", nextValue)} options={categoryOptions} value={filters.category} />
+          <CustomSelect label="Difficulty" name="difficulty" onChangeValue={(nextValue) => updateFilter("difficulty", nextValue)} options={difficultyOptions} value={filters.difficulty} />
+          <CustomSelect
+            label="Sort"
+            name="sort"
+            onChangeValue={(nextValue) => {
+              const [sortBy, sortDir] = nextValue.split(":");
+              setFilters((current) => ({ ...current, sortBy, sortDir, page: 0 }));
+            }}
+            options={sortOptions}
+            value={`${filters.sortBy}:${filters.sortDir}`}
+          />
         </div>
       </Card>
 
@@ -729,7 +771,7 @@ function QuizLibraryPage({ auth, setError }) {
         {quizzes.map((quiz) => (
           <QuizCard key={quiz.id} quiz={quiz} />
         ))}
-        {!quizzes.length ? <Card className="empty-state">No published quizzes available.</Card> : null}
+        {!quizzes.length ? <Card className="empty-state empty-state-card">No published quizzes available.</Card> : null}
       </section>
 
       <div className="pagination-row">
@@ -1169,6 +1211,7 @@ function AdminPage({ auth, setError, setMessage }) {
   const [overview, setOverview] = useState(null);
   const [mode, setMode] = useState("create");
   const [activeQuiz, setActiveQuiz] = useState(null);
+  const [selectedDifficulty, setSelectedDifficulty] = useState("MEDIUM");
   const [selectedQuizId, setSelectedQuizId] = useState(null);
   const [quizAnalytics, setQuizAnalytics] = useState(null);
   const [questionAnalytics, setQuestionAnalytics] = useState(null);
@@ -1217,6 +1260,10 @@ function AdminPage({ auth, setError, setMessage }) {
       .finally(() => setAnalyticsLoading(false));
   }, [auth.token, selectedQuizId, setError]);
 
+  useEffect(() => {
+    setSelectedDifficulty(activeQuiz?.difficulty || "MEDIUM");
+  }, [activeQuiz, mode]);
+
   async function handleSubmit(event) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -1224,7 +1271,7 @@ function AdminPage({ auth, setError, setMessage }) {
       title: formData.get("title"),
       description: formData.get("description"),
       categoryName: formData.get("categoryName"),
-      difficulty: formData.get("difficulty"),
+      difficulty: selectedDifficulty,
       timeLimitInMinutes: Number(formData.get("timeLimitInMinutes")),
       published: formData.get("published") === "on",
       negativeMarkingEnabled: formData.get("negativeMarkingEnabled") === "on",
@@ -1357,16 +1404,17 @@ function AdminPage({ auth, setError, setMessage }) {
 
             <div className="split-row">
               <Field defaultValue={activeQuiz?.categoryName || ""} label="Category" name="categoryName" placeholder="Programming" required={false} />
-              <div className="field">
-                <label className="field-label">Difficulty</label>
-                <div className="field-shell">
-                  <select className="field-input field-select" defaultValue={activeQuiz?.difficulty || "MEDIUM"} name="difficulty">
-                    <option value="EASY">EASY</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HARD">HARD</option>
-                  </select>
-                </div>
-              </div>
+              <CustomSelect
+                label="Difficulty"
+                name="difficulty"
+                onChangeValue={setSelectedDifficulty}
+                options={[
+                  { value: "EASY", label: "EASY" },
+                  { value: "MEDIUM", label: "MEDIUM" },
+                  { value: "HARD", label: "HARD" },
+                ]}
+                value={selectedDifficulty}
+              />
             </div>
 
             <div className="split-row admin-form-row">
