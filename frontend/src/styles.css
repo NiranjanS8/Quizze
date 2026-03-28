@@ -1068,6 +1068,65 @@ tbody tr {
   justify-content: flex-end;
 }
 
+.admin-quiz-actions-menu {
+  position: relative;
+  justify-self: end;
+}
+
+.icon-menu-btn {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.icon-menu-btn:hover {
+  border-color: var(--secondary);
+  color: var(--secondary);
+}
+
+.admin-quiz-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 25;
+  min-width: 180px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+
+.admin-quiz-menu-item {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.admin-quiz-menu-item:hover {
+  background: var(--surface-2);
+}
+
+.admin-quiz-menu-item .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.admin-quiz-menu-item.danger {
+  color: var(--secondary);
+}
+
 @media (max-width: 1080px) {
   .auth-wrap,
   .dashboard-grid,

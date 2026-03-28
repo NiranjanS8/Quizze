@@ -1247,6 +1247,7 @@ function AdminPage({ auth, setError, setMessage, section = "dashboard" }) {
   const [questionAnalytics, setQuestionAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [openQuizMenuId, setOpenQuizMenuId] = useState(null);
 
   async function loadQuizzes() {
     try {
@@ -1525,24 +1526,54 @@ function AdminPage({ auth, setError, setMessage, section = "dashboard" }) {
                     {quiz.negativeMarkingEnabled ? <span className="badge badge-warn">Negative marking</span> : null}
                   </div>
                 </div>
-                <div className="action-group admin-quiz-actions">
-                  <Button className="ghost-btn" onClick={() => setSelectedQuizId(quiz.id)} type="button">
-                    Analytics
-                  </Button>
-                  <Button
-                    className="secondary-btn"
-                    onClick={() => {
-                      setMode("edit");
-                      setActiveQuiz(quiz);
-                      setSelectedQuizId(quiz.id);
-                    }}
+                <div className="admin-quiz-actions-menu">
+                  <button
+                    aria-expanded={openQuizMenuId === quiz.id}
+                    className="icon-menu-btn"
+                    onClick={() => setOpenQuizMenuId((current) => (current === quiz.id ? null : quiz.id))}
                     type="button"
                   >
-                    Edit
-                  </Button>
-                  <Button className="ghost-btn" onClick={() => handleDelete(quiz.id)} type="button">
-                    Delete
-                  </Button>
+                    <span className="material-symbols-outlined">more_vert</span>
+                  </button>
+                  {openQuizMenuId === quiz.id ? (
+                    <div className="admin-quiz-menu">
+                      <button
+                        className="admin-quiz-menu-item"
+                        onClick={() => {
+                          setSelectedQuizId(quiz.id);
+                          setOpenQuizMenuId(null);
+                        }}
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined">analytics</span>
+                        <span>Analytics</span>
+                      </button>
+                      <button
+                        className="admin-quiz-menu-item"
+                        onClick={() => {
+                          setMode("edit");
+                          setActiveQuiz(quiz);
+                          setSelectedQuizId(quiz.id);
+                          setOpenQuizMenuId(null);
+                        }}
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined">edit</span>
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        className="admin-quiz-menu-item danger"
+                        onClick={() => {
+                          setOpenQuizMenuId(null);
+                          handleDelete(quiz.id);
+                        }}
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined">delete</span>
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}
