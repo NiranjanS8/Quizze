@@ -9,8 +9,9 @@ import com.quizze.quizze.auth.domain.PasswordResetOtp;
 import com.quizze.quizze.auth.event.UserRegisteredEvent;
 import com.quizze.quizze.auth.mapper.AuthMapper;
 import com.quizze.quizze.auth.repository.PasswordResetOtpRepository;
-import com.quizze.quizze.notification.service.PasswordResetEmailService;
 import com.quizze.quizze.common.exception.BadRequestException;
+import com.quizze.quizze.monitoring.service.ApplicationMetricsService;
+import com.quizze.quizze.notification.service.PasswordResetEmailService;
 import com.quizze.quizze.security.jwt.JwtService;
 import com.quizze.quizze.security.user.CustomUserDetails;
 import com.quizze.quizze.user.domain.Role;
@@ -53,6 +54,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthMapper authMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final ApplicationMetricsService applicationMetricsService;
     private final PasswordResetEmailService passwordResetEmailService;
 
     @Transactional
@@ -86,6 +88,7 @@ public class AuthService {
         User savedUser = userRepository.save(user);
         String token = jwtService.generateToken(savedUser.getId(), savedUser.getUsername(), savedUser.getRole().getName().name());
         log.info("User registered successfully with userId={} and role={}", savedUser.getId(), savedUser.getRole().getName());
+        applicationMetricsService.increment("quizze.auth.register.success");
         applicationEventPublisher.publishEvent(new UserRegisteredEvent(savedUser));
 
         return authMapper.toAuthResponse(savedUser, token);
@@ -102,6 +105,7 @@ public class AuthService {
         User user = principal.getUser();
         String token = jwtService.generateToken(user.getId(), user.getUsername(), user.getRole().getName().name());
         log.info("User authenticated successfully with userId={} and role={}", user.getId(), user.getRole().getName());
+        applicationMetricsService.increment("quizze.auth.login.success");
 
         return authMapper.toAuthResponse(user, token);
     }
@@ -125,6 +129,7 @@ public class AuthService {
             passwordResetEmailService.sendOtp(user, otp);
 
             log.info("Password reset OTP generated for userId={}", user.getId());
+            applicationMetricsService.increment("quizze.auth.password_reset.requested");
         }, () -> log.info("Forgot password requested for non-existent email='{}'", normalizedEmail));
 
         return FORGOT_PASSWORD_RESPONSE_MESSAGE;
@@ -158,6 +163,7 @@ public class AuthService {
         invalidateActiveOtps(normalizedEmail);
 
         log.info("Password reset completed successfully for userId={}", user.getId());
+        applicationMetricsService.increment("quizze.auth.password_reset.completed");
         return "Password reset successfully. You can now sign in.";
     }
 

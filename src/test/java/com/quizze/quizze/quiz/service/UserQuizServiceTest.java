@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.quizze.quizze.common.exception.BadRequestException;
+import com.quizze.quizze.monitoring.service.ApplicationMetricsService;
 import com.quizze.quizze.quiz.domain.AttemptStatus;
 import com.quizze.quizze.quiz.domain.DifficultyLevel;
 import com.quizze.quizze.quiz.domain.Option;
@@ -49,6 +50,9 @@ class UserQuizServiceTest {
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
 
+    @Mock
+    private ApplicationMetricsService applicationMetricsService;
+
     private UserQuizService userQuizService;
 
     @BeforeEach
@@ -58,7 +62,8 @@ class UserQuizServiceTest {
                 quizAttemptRepository,
                 userRepository,
                 new UserQuizMapper(),
-                applicationEventPublisher
+                applicationEventPublisher,
+                applicationMetricsService
         );
     }
 

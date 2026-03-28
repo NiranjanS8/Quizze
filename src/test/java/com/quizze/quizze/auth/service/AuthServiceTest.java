@@ -16,6 +16,7 @@ import com.quizze.quizze.auth.event.UserRegisteredEvent;
 import com.quizze.quizze.auth.mapper.AuthMapper;
 import com.quizze.quizze.auth.repository.PasswordResetOtpRepository;
 import com.quizze.quizze.common.exception.BadRequestException;
+import com.quizze.quizze.monitoring.service.ApplicationMetricsService;
 import com.quizze.quizze.notification.service.PasswordResetEmailService;
 import com.quizze.quizze.security.jwt.JwtService;
 import com.quizze.quizze.user.domain.Role;
@@ -61,6 +62,9 @@ class AuthServiceTest {
     private ApplicationEventPublisher applicationEventPublisher;
 
     @Mock
+    private ApplicationMetricsService applicationMetricsService;
+
+    @Mock
     private PasswordResetEmailService passwordResetEmailService;
 
     private AuthService authService;
@@ -76,6 +80,7 @@ class AuthServiceTest {
                 jwtService,
                 new AuthMapper(),
                 applicationEventPublisher,
+                applicationMetricsService,
                 passwordResetEmailService
         );
     }

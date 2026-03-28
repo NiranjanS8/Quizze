@@ -4,6 +4,7 @@ import static com.quizze.quizze.cache.config.CacheConfig.USER_PERFORMANCE_CACHE;
 
 import com.quizze.quizze.common.exception.BadRequestException;
 import com.quizze.quizze.common.exception.ResourceNotFoundException;
+import com.quizze.quizze.monitoring.service.ApplicationMetricsService;
 import com.quizze.quizze.quiz.domain.AttemptAnswer;
 import com.quizze.quizze.quiz.domain.AttemptStatus;
 import com.quizze.quizze.quiz.domain.DifficultyLevel;
@@ -65,6 +66,7 @@ public class UserQuizService {
     private final UserRepository userRepository;
     private final UserQuizMapper userQuizMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final ApplicationMetricsService applicationMetricsService;
 
     @Transactional(readOnly = true)
     public QuizCatalogResponse getPublishedQuizzes(
@@ -128,6 +130,7 @@ public class UserQuizService {
         QuizAttempt savedAttempt = quizAttemptRepository.save(attempt);
         LocalDateTime expiresAt = calculateExpiresAt(savedAttempt);
         log.info("Quiz attempt started with attemptId={} for userId={} and quizId={}", savedAttempt.getId(), userId, quizId);
+        applicationMetricsService.increment("quizze.quiz.attempt.started");
 
         return userQuizMapper.toStartQuizResponse(savedAttempt, expiresAt);
     }
@@ -217,6 +220,7 @@ public class UserQuizService {
                 "Quiz submitted successfully for attemptId={} with score={}, correctAnswers={}, wrongAnswers={}, timeExpired={}",
                 attempt.getId(), attempt.getScore(), correctAnswers, wrongAnswers, timeExpired
         );
+        applicationMetricsService.increment("quizze.quiz.attempt.submitted");
         applicationEventPublisher.publishEvent(new QuizSubmittedEvent(attempt.getQuiz().getId(), userId, attempt.getId()));
 
         return userQuizMapper.toSubmitQuizResponse(
