@@ -80,6 +80,7 @@ public class AuthService {
         user.setEmail(normalizedEmail);
         user.setUsername(normalizedUsername);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setNewQuizNotificationsEnabled(request.isNewQuizNotificationsEnabled());
         user.setRole(userRole);
 
         User savedUser = userRepository.save(user);

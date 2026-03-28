@@ -36,4 +36,6 @@ public class RegisterRequest {
             message = "Password must contain at least one uppercase letter, one lowercase letter, and one number"
     )
     private String password;
+
+    private boolean newQuizNotificationsEnabled;
 }

@@ -88,6 +88,7 @@ class AuthServiceTest {
         request.setEmail("niranjan@example.com");
         request.setUsername("niranjan");
         request.setPassword("Password123");
+        request.setNewQuizNotificationsEnabled(true);
 
         Role userRole = new Role();
         userRole.setName(RoleType.USER);
@@ -108,6 +109,9 @@ class AuthServiceTest {
         assertThat(response.getAccessToken()).isEqualTo("jwt-token");
         assertThat(response.getUsername()).isEqualTo("niranjan");
         assertThat(response.getRole()).isEqualTo("USER");
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertThat(userCaptor.getValue().isNewQuizNotificationsEnabled()).isTrue();
         ArgumentCaptor<UserRegisteredEvent> eventCaptor = ArgumentCaptor.forClass(UserRegisteredEvent.class);
         verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().user().getId()).isEqualTo(10L);

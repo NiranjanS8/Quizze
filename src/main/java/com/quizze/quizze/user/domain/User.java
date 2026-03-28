@@ -38,6 +38,9 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean newQuizNotificationsEnabled = false;
+
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;

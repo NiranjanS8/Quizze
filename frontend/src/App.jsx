@@ -442,6 +442,7 @@ function AuthPage({ auth, setMessage, setError }) {
             email: formData.get("email"),
             username: formData.get("username"),
             password: formData.get("password"),
+            newQuizNotificationsEnabled: formData.get("newQuizNotificationsEnabled") === "on",
           }),
         });
 
@@ -506,7 +507,6 @@ function AuthPage({ auth, setMessage, setError }) {
           <div className="auth-copy">
             <div className="eyebrow">Focused workflow</div>
             <h2>Sign in, take quizzes, review outcomes.</h2>
-            <p>A minimal interface for authentication, quiz attempts, reporting, and administration.</p>
           </div>
         </section>
 
@@ -544,6 +544,10 @@ function AuthPage({ auth, setMessage, setError }) {
                 <Field icon="alternate_email" label="Username" name="username" />
                 <Field icon="verified" label="Email Confirmation" name="confirmEmail" />
                 <Field icon="lock" label="Password" name="password" type="password" />
+                <label className="checkbox-label auth-checkbox-label">
+                  <input name="newQuizNotificationsEnabled" type="checkbox" />
+                  <span>Get notified when new quizzes are available</span>
+                </label>
               </>
             ) : isForgotPassword ? (
               <Field icon="mail" label="Email Address" name="email" type="email" />

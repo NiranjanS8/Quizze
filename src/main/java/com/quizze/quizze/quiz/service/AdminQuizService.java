@@ -5,6 +5,7 @@ import com.quizze.quizze.audit.service.AdminAuditLogService;
 import com.quizze.quizze.cache.service.QuizCacheInvalidationService;
 import com.quizze.quizze.common.exception.BadRequestException;
 import com.quizze.quizze.common.exception.ResourceNotFoundException;
+import com.quizze.quizze.notification.event.QuizPublishedEvent;
 import com.quizze.quizze.quiz.domain.Category;
 import com.quizze.quizze.quiz.domain.Option;
 import com.quizze.quizze.quiz.domain.Question;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,7 @@ public class AdminQuizService {
     private final AdminQuizMapper adminQuizMapper;
     private final AdminAuditLogService adminAuditLogService;
     private final QuizCacheInvalidationService quizCacheInvalidationService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
     public QuizResponse createQuiz(Long adminUserId, String adminUsername, QuizRequest request) {
@@ -45,6 +48,7 @@ public class AdminQuizService {
         Quiz quiz = new Quiz();
         applyQuizDetails(quiz, request);
         Quiz savedQuiz = quizRepository.save(quiz);
+        publishQuizIfNeeded(null, savedQuiz);
         adminAuditLogService.recordAction(
                 adminUserId,
                 adminUsername,
@@ -80,7 +84,9 @@ public class AdminQuizService {
         log.info("Updating quizId={} with title='{}'", quizId, request.getTitle());
         Quiz quiz = getQuizEntity(quizId);
         String previousTitle = quiz.getTitle();
+        boolean wasPublished = quiz.isPublished();
         applyQuizDetails(quiz, request);
+        publishQuizIfNeeded(wasPublished, quiz);
         adminAuditLogService.recordAction(
                 adminUserId,
                 adminUsername,
@@ -255,5 +261,19 @@ public class AdminQuizService {
 
         String normalized = value.trim();
         return normalized.length() <= 255 ? normalized : normalized.substring(0, 252) + "...";
+    }
+
+    private void publishQuizIfNeeded(Boolean wasPublished, Quiz quiz) {
+        boolean justPublished = quiz.isPublished() && (wasPublished == null || !wasPublished);
+        if (!justPublished) {
+            return;
+        }
+
+        applicationEventPublisher.publishEvent(new QuizPublishedEvent(
+                quiz.getId(),
+                quiz.getTitle(),
+                quiz.getDescription(),
+                quiz.getCategory() == null ? null : quiz.getCategory().getName()
+        ));
     }
 }

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.quizze.quizze.audit.service.AdminAuditLogService;
 import com.quizze.quizze.cache.service.QuizCacheInvalidationService;
 import com.quizze.quizze.common.exception.BadRequestException;
+import com.quizze.quizze.notification.event.QuizPublishedEvent;
 import com.quizze.quizze.quiz.domain.Category;
 import com.quizze.quizze.quiz.domain.DifficultyLevel;
 import com.quizze.quizze.quiz.domain.Question;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class AdminQuizServiceTest {
@@ -51,6 +53,9 @@ class AdminQuizServiceTest {
     @Mock
     private QuizCacheInvalidationService quizCacheInvalidationService;
 
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
+
     private AdminQuizService adminQuizService;
 
     @BeforeEach
@@ -61,7 +66,8 @@ class AdminQuizServiceTest {
                 categoryRepository,
                 new AdminQuizMapper(),
                 adminAuditLogService,
-                quizCacheInvalidationService
+                quizCacheInvalidationService,
+                applicationEventPublisher
         );
     }
 
@@ -93,6 +99,9 @@ class AdminQuizServiceTest {
         verify(categoryRepository).save(categoryCaptor.capture());
         verify(adminAuditLogService).recordAction(eq(1L), eq("admin"), any(), eq("QUIZ"), eq(11L), eq("Java Basics"), any());
         verify(quizCacheInvalidationService).evictAnalyticsForQuiz(11L);
+        ArgumentCaptor<QuizPublishedEvent> eventCaptor = ArgumentCaptor.forClass(QuizPublishedEvent.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().quizId()).isEqualTo(11L);
 
         assertThat(categoryCaptor.getValue().getName()).isEqualTo("Programming");
         assertThat(response.getCategoryName()).isEqualTo("Programming");

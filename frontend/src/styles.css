@@ -1049,6 +1049,10 @@ tbody tr {
   color: var(--text);
 }
 
+.auth-checkbox-label {
+  margin-top: 4px;
+}
+
 .checkbox-label input {
   accent-color: var(--secondary);
   width: 16px;
