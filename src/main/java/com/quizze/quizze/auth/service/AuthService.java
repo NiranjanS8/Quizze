@@ -4,6 +4,7 @@ import com.quizze.quizze.auth.dto.AuthResponse;
 import com.quizze.quizze.auth.dto.LoginRequest;
 import com.quizze.quizze.auth.dto.RegisterRequest;
 import com.quizze.quizze.auth.mapper.AuthMapper;
+import com.quizze.quizze.notification.service.WelcomeEmailService;
 import com.quizze.quizze.security.jwt.JwtService;
 import com.quizze.quizze.security.user.CustomUserDetails;
 import com.quizze.quizze.user.domain.Role;
@@ -33,6 +34,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final AuthMapper authMapper;
+    private final WelcomeEmailService welcomeEmailService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -64,6 +66,7 @@ public class AuthService {
         User savedUser = userRepository.save(user);
         String token = jwtService.generateToken(savedUser.getId(), savedUser.getUsername(), savedUser.getRole().getName().name());
         log.info("User registered successfully with userId={} and role={}", savedUser.getId(), savedUser.getRole().getName());
+        welcomeEmailService.sendWelcomeEmail(savedUser);
 
         return authMapper.toAuthResponse(savedUser, token);
     }
