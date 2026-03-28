@@ -183,6 +183,25 @@ export default function App() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    function handleStorageChange(event) {
+      if (event.key !== STORAGE_TOKEN && event.key !== STORAGE_USER) {
+        return;
+      }
+
+      const nextToken = localStorage.getItem(STORAGE_TOKEN) || "";
+      const nextUser = readStoredUser();
+
+      setToken(nextToken);
+      setUser(nextUser);
+      setMessage("");
+      setError("");
+    }
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
   const auth = useMemo(
     () => ({
       token,
@@ -234,12 +253,24 @@ export default function App() {
         <Route path="/history" element={<HistoryPage {...sharedProps} />} />
         <Route path="/results" element={<ResultsPage {...sharedProps} />} />
         <Route path="/results/:attemptId" element={<ResultDetailPage {...sharedProps} />} />
-        <Route
+      <Route
           path="/admin"
-          element={auth.user?.role === "ADMIN" ? <AdminPage {...sharedProps} /> : <Navigate to="/dashboard" replace />}
+          element={auth.user?.role === "ADMIN" ? <Navigate to="/admin/dashboard" replace /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="/admin/dashboard"
+          element={auth.user?.role === "ADMIN" ? <AdminPage section="dashboard" {...sharedProps} /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="/admin/quizzes"
+          element={auth.user?.role === "ADMIN" ? <AdminPage section="quizzes" {...sharedProps} /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="/admin/analytics"
+          element={auth.user?.role === "ADMIN" ? <AdminPage section="analytics" {...sharedProps} /> : <Navigate to="/dashboard" replace />}
         />
       </Route>
-      <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/auth"} replace />} />
+      <Route path="*" element={<Navigate to={auth.isAuthenticated ? (auth.user?.role === "ADMIN" ? "/admin/dashboard" : "/dashboard") : "/auth"} replace />} />
     </Routes>
   );
 }
@@ -253,19 +284,19 @@ function ProtectedLayout({ auth, message, setMessage, error, setError }) {
   }
 
   const navItems = [
-    {
-      to: auth.user?.role === "ADMIN" ? "/admin" : "/dashboard",
-      icon: "dashboard",
-      label: auth.user?.role === "ADMIN" ? "Overview" : "Dashboard",
-    },
-    { to: "/quizzes", icon: "quiz", label: "Quizzes" },
-    { to: "/history", icon: "history", label: "History" },
-    { to: "/results", icon: "analytics", label: "Results" },
+    ...(auth.user?.role === "ADMIN"
+      ? [
+          { to: "/admin/dashboard", icon: "dashboard", label: "Dashboard" },
+          { to: "/admin/quizzes", icon: "quiz", label: "Quizzes" },
+          { to: "/admin/analytics", icon: "analytics", label: "Analytics" },
+        ]
+      : [
+          { to: "/dashboard", icon: "dashboard", label: "Dashboard" },
+          { to: "/quizzes", icon: "quiz", label: "Quizzes" },
+          { to: "/history", icon: "history", label: "History" },
+          { to: "/results", icon: "analytics", label: "Results" },
+        ]),
   ];
-
-  if (auth.user?.role === "ADMIN") {
-    navItems.push({ to: "/admin", icon: "settings", label: "Admin" });
-  }
 
   return (
     <div className="layout">
@@ -428,8 +459,8 @@ function AuthPage({ auth, setMessage, setError }) {
           <form className="form-grid" onSubmit={handleSubmit}>
             {isRegister ? (
               <div className="split-row">
-                <Field label="First Name" name="firstName" placeholder="Niranjan" />
-                <Field label="Last Name" name="lastName" placeholder="Kumar" />
+                <Field label="First Name" name="firstName" />
+                <Field label="Last Name" name="lastName" />
               </div>
             ) : null}
 
@@ -437,12 +468,11 @@ function AuthPage({ auth, setMessage, setError }) {
               icon={isRegister ? "mail" : "person"}
               label={isRegister ? "Email Address" : "Username or Email"}
               name={isRegister ? "email" : "usernameOrEmail"}
-              placeholder={isRegister ? "name@example.com" : "niranjan"}
             />
 
-            {isRegister ? <Field icon="alternate_email" label="Username" name="username" placeholder="niranjan" /> : null}
-            {isRegister ? <Field icon="verified" label="Email Confirmation" name="confirmEmail" placeholder="Repeat your email" /> : null}
-            <Field icon="lock" label="Password" name="password" placeholder="Password123" type="password" />
+            {isRegister ? <Field icon="alternate_email" label="Username" name="username" /> : null}
+            {isRegister ? <Field icon="verified" label="Email Confirmation" name="confirmEmail" /> : null}
+            <Field icon="lock" label="Password" name="password" type="password" />
 
             <Button className="primary-btn" disabled={loading} type="submit">
               {loading ? "Please wait..." : isRegister ? "Create Account" : "Sign In"}
@@ -974,8 +1004,8 @@ function AttemptPage({ auth, setError, setMessage }) {
 
   return (
     <section className="quiz-screen">
-      <section className="hero">
-        <div>
+      <section className="attempt-header">
+        <div className="attempt-header-content">
           <span className="tag">
             Question {currentIndex + 1} of {questions.length}
           </span>
@@ -1206,7 +1236,7 @@ function ResultDetailPage({ auth, setError }) {
   );
 }
 
-function AdminPage({ auth, setError, setMessage }) {
+function AdminPage({ auth, setError, setMessage, section = "dashboard" }) {
   const [quizzes, setQuizzes] = useState([]);
   const [overview, setOverview] = useState(null);
   const [mode, setMode] = useState("create");
@@ -1312,98 +1342,114 @@ function AdminPage({ auth, setError, setMessage }) {
     }
   }
 
+  const showDashboardSection = section === "dashboard";
+  const showQuizSection = section === "quizzes";
+  const showAnalyticsSection = section === "analytics";
+
   return (
     <>
       <section className="hero">
         <div>
-          <h2>Admin Dashboard</h2>
-          <p>Manage quizzes, review publication state, and keep the content catalog organized.</p>
+          <h2>
+            {showDashboardSection ? "Admin Dashboard" : showQuizSection ? "Quiz Management" : "Analytics"}
+          </h2>
+          <p>
+            {showDashboardSection
+              ? "Review the platform overview and monitor overall quiz performance."
+              : showQuizSection
+                ? "Create, update, and organize quiz content for your platform."
+                : "Inspect platform, quiz, and question-level analytics from one place."}
+          </p>
         </div>
       </section>
 
-      <section className="metric-grid">
-        <article className="stat-card">
-          <div className="stat-label">Total Users</div>
-          <div className="stat-value accent-primary">{overview?.totalUsers ?? 0}</div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-label">Total Quizzes</div>
-          <div className="stat-value">{overview?.totalQuizzes ?? quizzes.length}</div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-label">Published</div>
-          <div className="stat-value accent-success">{overview?.publishedQuizzes ?? quizzes.filter((quiz) => quiz.published).length}</div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-label">Total Attempts</div>
-          <div className="stat-value accent-secondary">{overview?.totalAttempts ?? 0}</div>
-        </article>
-      </section>
+      {showDashboardSection ? (
+        <>
+          <section className="metric-grid">
+            <article className="stat-card">
+              <div className="stat-label">Total Users</div>
+              <div className="stat-value accent-primary">{overview?.totalUsers ?? 0}</div>
+            </article>
+            <article className="stat-card">
+              <div className="stat-label">Total Quizzes</div>
+              <div className="stat-value">{overview?.totalQuizzes ?? quizzes.length}</div>
+            </article>
+            <article className="stat-card">
+              <div className="stat-label">Published</div>
+              <div className="stat-value accent-success">{overview?.publishedQuizzes ?? quizzes.filter((quiz) => quiz.published).length}</div>
+            </article>
+            <article className="stat-card">
+              <div className="stat-label">Total Attempts</div>
+              <div className="stat-value accent-secondary">{overview?.totalAttempts ?? 0}</div>
+            </article>
+          </section>
 
-      <section className="dashboard-grid">
-        <Card>
-          <div className="panel-title-row">
-            <h3 className="panel-title">Most Attempted Quizzes</h3>
-            <span className="muted tiny">{overview?.submittedAttempts ?? 0} submitted attempts total</span>
-          </div>
-          <div className="list">
-            {overview?.mostAttemptedQuizzes?.map((item) => (
-              <div className="list-item" key={`most-${item.quizId}`}>
-                <div className="helper-row">
-                  <div>
-                    <div className="list-title">{item.quizTitle}</div>
-                    <div className="muted tiny">{item.categoryName || "Uncategorized"}</div>
-                  </div>
-                  <div className="overview-emphasis">{item.attempts}</div>
-                </div>
+          <section className="dashboard-grid">
+            <Card>
+              <div className="panel-title-row">
+                <h3 className="panel-title">Most Attempted Quizzes</h3>
+                <span className="muted tiny">{overview?.submittedAttempts ?? 0} submitted attempts total</span>
               </div>
-            ))}
-            {!overview?.mostAttemptedQuizzes?.length ? <div className="empty-state">No attempt data yet.</div> : null}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="panel-title-row">
-            <h3 className="panel-title">Top Performing Quizzes</h3>
-            <span className="muted tiny">By average submitted score</span>
-          </div>
-          <div className="list">
-            {overview?.topPerformingQuizzes?.map((item) => (
-              <div className="list-item" key={`top-${item.quizId}`}>
-                <div className="helper-row">
-                  <div>
-                    <div className="list-title">{item.quizTitle}</div>
-                    <div className="muted tiny">
-                      {Math.round(item.averagePercentage || 0)}% avg | {item.attempts} attempts
+              <div className="list">
+                {overview?.mostAttemptedQuizzes?.map((item) => (
+                  <div className="list-item" key={`most-${item.quizId}`}>
+                    <div className="helper-row">
+                      <div>
+                        <div className="list-title">{item.quizTitle}</div>
+                        <div className="muted tiny">{item.categoryName || "Uncategorized"}</div>
+                      </div>
+                      <div className="overview-emphasis">{item.attempts}</div>
                     </div>
                   </div>
-                  <div className="overview-emphasis">{Number(item.averageScore || 0).toFixed(1)}</div>
-                </div>
+                ))}
+                {!overview?.mostAttemptedQuizzes?.length ? <div className="empty-state">No attempt data yet.</div> : null}
               </div>
-            ))}
-            {!overview?.topPerformingQuizzes?.length ? <div className="empty-state">No submitted results yet.</div> : null}
-          </div>
-        </Card>
-      </section>
+            </Card>
 
+            <Card>
+              <div className="panel-title-row">
+                <h3 className="panel-title">Top Performing Quizzes</h3>
+                <span className="muted tiny">By average submitted score</span>
+              </div>
+              <div className="list">
+                {overview?.topPerformingQuizzes?.map((item) => (
+                  <div className="list-item" key={`top-${item.quizId}`}>
+                    <div className="helper-row">
+                      <div>
+                        <div className="list-title">{item.quizTitle}</div>
+                        <div className="muted tiny">
+                          {Math.round(item.averagePercentage || 0)}% avg | {item.attempts} attempts
+                        </div>
+                      </div>
+                      <div className="overview-emphasis">{Number(item.averageScore || 0).toFixed(1)}</div>
+                    </div>
+                  </div>
+                ))}
+                {!overview?.topPerformingQuizzes?.length ? <div className="empty-state">No submitted results yet.</div> : null}
+              </div>
+            </Card>
+          </section>
+        </>
+      ) : null}
+
+      {showQuizSection ? (
       <section className="dashboard-grid admin-layout">
         <Card>
           <div className="panel-title-row">
             <h3 className="panel-title">{mode === "edit" ? "Edit Quiz" : "Create New Quiz"}</h3>
           </div>
           <form className="form-grid" onSubmit={handleSubmit}>
-            <Field defaultValue={activeQuiz?.title || ""} label="Quiz Title" name="title" placeholder="Java Basics" />
+            <Field defaultValue={activeQuiz?.title || ""} label="Quiz Title" name="title" />
             <Field
               as="textarea"
               defaultValue={activeQuiz?.description || ""}
               label="Description"
               name="description"
-              placeholder="Fundamentals of Java programming"
               required={false}
             />
 
             <div className="split-row">
-              <Field defaultValue={activeQuiz?.categoryName || ""} label="Category" name="categoryName" placeholder="Programming" required={false} />
+              <Field defaultValue={activeQuiz?.categoryName || ""} label="Category" name="categoryName" required={false} />
               <CustomSelect
                 label="Difficulty"
                 name="difficulty"
@@ -1426,7 +1472,7 @@ function AdminPage({ auth, setError, setMessage }) {
                 name="timeLimitInMinutes"
                 type="number"
               />
-              <div className="check-grid">
+              <div className="check-grid admin-check-grid">
                 <label className="checkbox-label">
                   <input defaultChecked={Boolean(activeQuiz?.published)} name="published" type="checkbox" />
                   <span>Published</span>
@@ -1442,7 +1488,7 @@ function AdminPage({ auth, setError, setMessage }) {
               </div>
             </div>
 
-            <div className="helper-row">
+            <div className="helper-row admin-form-actions">
               <Button className="primary-btn" disabled={saving} type="submit">
                 {saving ? "Saving..." : mode === "edit" ? "Update Quiz" : "Create Quiz"}
               </Button>
@@ -1466,20 +1512,20 @@ function AdminPage({ auth, setError, setMessage }) {
           <div className="panel-title-row">
             <h3 className="panel-title">Manage Quizzes</h3>
           </div>
-          <div className="list">
+          <div className="list admin-quiz-list">
             {quizzes.map((quiz) => (
-              <div className="list-item helper-row" key={quiz.id}>
-                <div>
+              <div className="list-item admin-quiz-item" key={quiz.id}>
+                <div className="admin-quiz-meta">
                   <div className="list-title">{quiz.title}</div>
-                  <div className="muted tiny">
+                  <div className="muted tiny admin-quiz-subtitle">
                     {quiz.categoryName || "Uncategorized"} | {quiz.questions?.length || 0} questions | {quiz.published ? "Published" : "Draft"}
                   </div>
-                  <div className="chip-row" style={{ marginTop: 8 }}>
+                  <div className="chip-row admin-quiz-chips">
                     {quiz.oneAttemptOnly ? <span className="badge">One attempt</span> : null}
                     {quiz.negativeMarkingEnabled ? <span className="badge badge-warn">Negative marking</span> : null}
                   </div>
                 </div>
-                <div className="action-group">
+                <div className="action-group admin-quiz-actions">
                   <Button className="ghost-btn" onClick={() => setSelectedQuizId(quiz.id)} type="button">
                     Analytics
                   </Button>
@@ -1504,7 +1550,10 @@ function AdminPage({ auth, setError, setMessage }) {
           </div>
         </Card>
       </section>
+      ) : null}
 
+      {showAnalyticsSection ? (
+      <>
       <Card>
         <div className="panel-title-row">
           <h3 className="panel-title">Quiz Analytics</h3>
@@ -1610,6 +1659,8 @@ function AdminPage({ auth, setError, setMessage }) {
           </div>
         </Card>
       </section>
+      </>
+      ) : null}
     </>
   );
 }
