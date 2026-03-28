@@ -383,6 +383,7 @@ function AuthPage({ auth, setMessage, setError }) {
   const [loading, setLoading] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
+  const isLogin = mode === "login";
   const isRegister = mode === "register";
   const isForgotPassword = mode === "forgot";
   const isResetPassword = mode === "reset";
@@ -573,47 +574,56 @@ function AuthPage({ auth, setMessage, setError }) {
             </Button>
           </form>
 
-          <div className="auth-toggle">
-            {isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
-            <button onClick={() => setMode(isRegister ? "login" : "register")} type="button">
-              {isRegister ? "Sign In" : "Create an account"}
-            </button>
-          </div>
+          {isLogin || isRegister ? (
+            <div className="auth-toggle">
+              {isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
+              <button onClick={() => setMode(isRegister ? "login" : "register")} type="button">
+                {isRegister ? "Sign In" : "Create an account"}
+              </button>
+            </div>
+          ) : null}
 
-          {!isRegister ? (
+          {isLogin ? (
             <div className="auth-secondary-actions">
-              {!isForgotPassword ? (
-                <button className="auth-inline-btn" onClick={() => setMode("forgot")} type="button">
-                  Forgot password?
-                </button>
-              ) : null}
-              {isForgotPassword || isResetPassword ? (
-                <button className="auth-inline-btn" onClick={() => setMode("login")} type="button">
-                  Back to sign in
-                </button>
-              ) : null}
-              {isResetPassword ? (
-                <button
-                  className="auth-inline-btn"
-                  disabled={resendCooldown > 0 || loading || !resetEmail}
-                  onClick={async () => {
-                    try {
-                      setLoading(true);
-                      setError("");
-                      setMessage("");
-                      await sendResetOtp(resetEmail, false);
-                      setMessage("If the account exists, a new OTP has been sent.");
-                    } catch (submitError) {
-                      setError(submitError.message);
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  type="button"
-                >
-                  {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : "Resend OTP"}
-                </button>
-              ) : null}
+              <button className="auth-inline-btn" onClick={() => setMode("forgot")} type="button">
+                Forgot password?
+              </button>
+            </div>
+          ) : null}
+
+          {isForgotPassword ? (
+            <div className="auth-secondary-actions">
+              <button className="auth-inline-btn" onClick={() => setMode("login")} type="button">
+                Back to sign in
+              </button>
+            </div>
+          ) : null}
+
+          {isResetPassword ? (
+            <div className="auth-secondary-actions auth-secondary-actions-stack">
+              <button className="auth-inline-btn" onClick={() => setMode("login")} type="button">
+                Back to sign in
+              </button>
+              <button
+                className="auth-inline-btn"
+                disabled={resendCooldown > 0 || loading || !resetEmail}
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    setError("");
+                    setMessage("");
+                    await sendResetOtp(resetEmail, false);
+                    setMessage("If the account exists, a new OTP has been sent.");
+                  } catch (submitError) {
+                    setError(submitError.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                type="button"
+              >
+                {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : "Resend OTP"}
+              </button>
             </div>
           ) : null}
         </Card>
@@ -696,7 +706,6 @@ function DashboardPage({ auth, setError, setMessage }) {
       <section className="hero">
         <div>
           <h2>Welcome back, {auth.user?.username}.</h2>
-          <p>Track quiz activity, review results, and continue where you left off in a calm focused workspace.</p>
         </div>
       </section>
 
@@ -732,10 +741,6 @@ function DashboardPage({ auth, setError, setMessage }) {
         </Card>
 
         <Card>
-          <div className="panel-title-row">
-            <h3 className="panel-title">Progress</h3>
-            <span className="tag alt">Level {Math.max(1, attemptHistory.length + 3)}</span>
-          </div>
           <div className="progress-shell">
             <div className="helper-row tiny muted">
               <span>Average performance</span>
@@ -744,7 +749,6 @@ function DashboardPage({ auth, setError, setMessage }) {
             <div className="progress-track">
               <div className="progress-fill" style={{ width: `${Math.min(100, avgPct || 12)}%` }} />
             </div>
-            <div className="muted">A quick snapshot of how your submitted quiz scores are trending.</div>
           </div>
 
           <div className="section-separator" />
