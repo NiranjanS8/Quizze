@@ -2,7 +2,6 @@ package com.quizze.quizze.quiz.service;
 
 import static com.quizze.quizze.cache.config.CacheConfig.USER_PERFORMANCE_CACHE;
 
-import com.quizze.quizze.cache.service.QuizCacheInvalidationService;
 import com.quizze.quizze.common.exception.BadRequestException;
 import com.quizze.quizze.common.exception.ResourceNotFoundException;
 import com.quizze.quizze.quiz.domain.AttemptAnswer;
@@ -21,6 +20,7 @@ import com.quizze.quizze.quiz.dto.user.StartQuizResponse;
 import com.quizze.quizze.quiz.dto.user.SubmitAnswerRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizResponse;
+import com.quizze.quizze.quiz.event.QuizSubmittedEvent;
 import com.quizze.quizze.quiz.dto.user.UserCategoryPerformanceResponse;
 import com.quizze.quizze.quiz.dto.user.UserPerformanceAnalyticsResponse;
 import com.quizze.quizze.quiz.dto.user.UserPerformanceTrendItemResponse;
@@ -43,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -63,7 +64,7 @@ public class UserQuizService {
     private final QuizAttemptRepository quizAttemptRepository;
     private final UserRepository userRepository;
     private final UserQuizMapper userQuizMapper;
-    private final QuizCacheInvalidationService quizCacheInvalidationService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional(readOnly = true)
     public QuizCatalogResponse getPublishedQuizzes(
@@ -216,7 +217,7 @@ public class UserQuizService {
                 "Quiz submitted successfully for attemptId={} with score={}, correctAnswers={}, wrongAnswers={}, timeExpired={}",
                 attempt.getId(), attempt.getScore(), correctAnswers, wrongAnswers, timeExpired
         );
-        quizCacheInvalidationService.evictAfterQuizSubmission(attempt.getQuiz().getId(), userId);
+        applicationEventPublisher.publishEvent(new QuizSubmittedEvent(attempt.getQuiz().getId(), userId, attempt.getId()));
 
         return userQuizMapper.toSubmitQuizResponse(
                 attempt,

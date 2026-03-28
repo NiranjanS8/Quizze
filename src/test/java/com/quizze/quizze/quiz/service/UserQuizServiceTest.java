@@ -2,12 +2,9 @@ package com.quizze.quizze.quiz.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.quizze.quizze.cache.service.QuizCacheInvalidationService;
 import com.quizze.quizze.common.exception.BadRequestException;
 import com.quizze.quizze.quiz.domain.AttemptStatus;
 import com.quizze.quizze.quiz.domain.DifficultyLevel;
@@ -15,7 +12,7 @@ import com.quizze.quizze.quiz.domain.Option;
 import com.quizze.quizze.quiz.domain.Question;
 import com.quizze.quizze.quiz.domain.Quiz;
 import com.quizze.quizze.quiz.domain.QuizAttempt;
-import com.quizze.quizze.quiz.dto.user.StartQuizResponse;
+import com.quizze.quizze.quiz.event.QuizSubmittedEvent;
 import com.quizze.quizze.quiz.dto.user.SubmitAnswerRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizResponse;
@@ -29,11 +26,13 @@ import com.quizze.quizze.user.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class UserQuizServiceTest {
@@ -48,7 +47,7 @@ class UserQuizServiceTest {
     private UserRepository userRepository;
 
     @Mock
-    private QuizCacheInvalidationService quizCacheInvalidationService;
+    private ApplicationEventPublisher applicationEventPublisher;
 
     private UserQuizService userQuizService;
 
@@ -59,7 +58,7 @@ class UserQuizServiceTest {
                 quizAttemptRepository,
                 userRepository,
                 new UserQuizMapper(),
-                quizCacheInvalidationService
+                applicationEventPublisher
         );
     }
 
@@ -84,7 +83,7 @@ class UserQuizServiceTest {
     }
 
     @Test
-    void submitQuizShouldApplyNegativeMarkingAndInvalidateCache() {
+    void submitQuizShouldApplyNegativeMarkingAndPublishSubmissionEvent() {
         Quiz quiz = new Quiz();
         quiz.setId(25L);
         quiz.setTitle("Java Fundamentals");
@@ -132,7 +131,11 @@ class UserQuizServiceTest {
         assertThat(attempt.getWrongAnswers()).isEqualTo(1);
         assertThat(attempt.getScore()).isEqualTo(4.0);
         assertThat(response.getPercentage()).isEqualTo(44.44444444444444);
-        verify(quizCacheInvalidationService).evictAfterQuizSubmission(25L, 7L);
+        ArgumentCaptor<QuizSubmittedEvent> eventCaptor = ArgumentCaptor.forClass(QuizSubmittedEvent.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().quizId()).isEqualTo(25L);
+        assertThat(eventCaptor.getValue().userId()).isEqualTo(7L);
+        assertThat(eventCaptor.getValue().attemptId()).isEqualTo(50L);
     }
 
     private User user(Long id, String username) {
