@@ -6,9 +6,9 @@ import com.quizze.quizze.auth.dto.LoginRequest;
 import com.quizze.quizze.auth.dto.RegisterRequest;
 import com.quizze.quizze.auth.dto.ResetPasswordRequest;
 import com.quizze.quizze.auth.domain.PasswordResetOtp;
+import com.quizze.quizze.auth.event.UserRegisteredEvent;
 import com.quizze.quizze.auth.mapper.AuthMapper;
 import com.quizze.quizze.auth.repository.PasswordResetOtpRepository;
-import com.quizze.quizze.notification.service.WelcomeEmailService;
 import com.quizze.quizze.notification.service.PasswordResetEmailService;
 import com.quizze.quizze.common.exception.BadRequestException;
 import com.quizze.quizze.security.jwt.JwtService;
@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -51,7 +52,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final AuthMapper authMapper;
-    private final WelcomeEmailService welcomeEmailService;
+    private final ApplicationEventPublisher applicationEventPublisher;
     private final PasswordResetEmailService passwordResetEmailService;
 
     @Transactional
@@ -84,7 +85,7 @@ public class AuthService {
         User savedUser = userRepository.save(user);
         String token = jwtService.generateToken(savedUser.getId(), savedUser.getUsername(), savedUser.getRole().getName().name());
         log.info("User registered successfully with userId={} and role={}", savedUser.getId(), savedUser.getRole().getName());
-        welcomeEmailService.sendWelcomeEmail(savedUser);
+        applicationEventPublisher.publishEvent(new UserRegisteredEvent(savedUser));
 
         return authMapper.toAuthResponse(savedUser, token);
     }

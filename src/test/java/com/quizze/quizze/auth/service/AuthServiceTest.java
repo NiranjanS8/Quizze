@@ -12,11 +12,11 @@ import com.quizze.quizze.auth.dto.AuthResponse;
 import com.quizze.quizze.auth.dto.ForgotPasswordRequest;
 import com.quizze.quizze.auth.dto.RegisterRequest;
 import com.quizze.quizze.auth.dto.ResetPasswordRequest;
+import com.quizze.quizze.auth.event.UserRegisteredEvent;
 import com.quizze.quizze.auth.mapper.AuthMapper;
 import com.quizze.quizze.auth.repository.PasswordResetOtpRepository;
 import com.quizze.quizze.common.exception.BadRequestException;
 import com.quizze.quizze.notification.service.PasswordResetEmailService;
-import com.quizze.quizze.notification.service.WelcomeEmailService;
 import com.quizze.quizze.security.jwt.JwtService;
 import com.quizze.quizze.user.domain.Role;
 import com.quizze.quizze.user.domain.RoleType;
@@ -25,11 +25,11 @@ import com.quizze.quizze.user.repository.RoleRepository;
 import com.quizze.quizze.user.repository.UserRepository;
 import jakarta.persistence.EntityExistsException;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -58,7 +58,7 @@ class AuthServiceTest {
     private JwtService jwtService;
 
     @Mock
-    private WelcomeEmailService welcomeEmailService;
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @Mock
     private PasswordResetEmailService passwordResetEmailService;
@@ -75,7 +75,7 @@ class AuthServiceTest {
                 authenticationManager,
                 jwtService,
                 new AuthMapper(),
-                welcomeEmailService,
+                applicationEventPublisher,
                 passwordResetEmailService
         );
     }
@@ -108,7 +108,9 @@ class AuthServiceTest {
         assertThat(response.getAccessToken()).isEqualTo("jwt-token");
         assertThat(response.getUsername()).isEqualTo("niranjan");
         assertThat(response.getRole()).isEqualTo("USER");
-        verify(welcomeEmailService).sendWelcomeEmail(any(User.class));
+        ArgumentCaptor<UserRegisteredEvent> eventCaptor = ArgumentCaptor.forClass(UserRegisteredEvent.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().user().getId()).isEqualTo(10L);
     }
 
     @Test
