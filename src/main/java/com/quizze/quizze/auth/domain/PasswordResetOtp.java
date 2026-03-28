@@ -31,6 +31,9 @@ public class PasswordResetOtp extends BaseEntity {
     @Column(nullable = false)
     private LocalDateTime expiresAt;
 
+    @Column(nullable = false)
+    private Integer failedAttempts = 0;
+
     @Column
     private LocalDateTime usedAt;
 }

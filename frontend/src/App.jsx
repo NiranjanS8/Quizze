@@ -382,6 +382,7 @@ function AuthPage({ auth, setMessage, setError }) {
   const [mode, setMode] = useState("login");
   const [loading, setLoading] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
   const isRegister = mode === "register";
   const isForgotPassword = mode === "forgot";
   const isResetPassword = mode === "reset";
@@ -390,6 +391,34 @@ function AuthPage({ auth, setMessage, setError }) {
     setError("");
     setMessage("");
   }, [mode, setError, setMessage]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setResendCooldown((current) => (current <= 1 ? 0 : current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
+
+  async function sendResetOtp(email, moveToReset = false) {
+    await apiRequest("/api/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+      }),
+    });
+
+    setResetEmail(email);
+    setResendCooldown(60);
+
+    if (moveToReset) {
+      setMode("reset");
+    }
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -419,16 +448,7 @@ function AuthPage({ auth, setMessage, setError }) {
         setMessage("Account created. Sign in to continue.");
       } else if (isForgotPassword) {
         const email = String(formData.get("email") || "");
-
-        await apiRequest("/api/auth/forgot-password", {
-          method: "POST",
-          body: JSON.stringify({
-            email,
-          }),
-        });
-
-        setResetEmail(email);
-        setMode("reset");
+        await sendResetOtp(email, true);
         setMessage("If the account exists, an OTP has been sent to the email address.");
       } else if (isResetPassword) {
         if (formData.get("newPassword") !== formData.get("confirmNewPassword")) {
@@ -573,8 +593,25 @@ function AuthPage({ auth, setMessage, setError }) {
                 </button>
               ) : null}
               {isResetPassword ? (
-                <button className="auth-inline-btn" onClick={() => setMode("forgot")} type="button">
-                  Resend OTP
+                <button
+                  className="auth-inline-btn"
+                  disabled={resendCooldown > 0 || loading || !resetEmail}
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      setError("");
+                      setMessage("");
+                      await sendResetOtp(resetEmail, false);
+                      setMessage("If the account exists, a new OTP has been sent.");
+                    } catch (submitError) {
+                      setError(submitError.message);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  type="button"
+                >
+                  {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : "Resend OTP"}
                 </button>
               ) : null}
             </div>

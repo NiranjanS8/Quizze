@@ -20,6 +20,7 @@ import com.quizze.quizze.user.repository.RoleRepository;
 import com.quizze.quizze.user.repository.UserRepository;
 import jakarta.persistence.EntityExistsException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,8 @@ public class AuthService {
     private static final String FORGOT_PASSWORD_RESPONSE_MESSAGE =
             "If an account exists for that email, an OTP has been sent";
     private static final int PASSWORD_RESET_OTP_EXPIRY_MINUTES = 10;
+    private static final int PASSWORD_RESET_RESEND_COOLDOWN_SECONDS = 60;
+    private static final int PASSWORD_RESET_MAX_OTP_ATTEMPTS = 5;
 
     private final UserRepository userRepository;
     private final PasswordResetOtpRepository passwordResetOtpRepository;
@@ -107,6 +110,7 @@ public class AuthService {
         log.info("Processing forgot password request for email='{}'", normalizedEmail);
 
         userRepository.findByEmail(normalizedEmail).ifPresentOrElse(user -> {
+            enforceResendCooldown(normalizedEmail);
             invalidateActiveOtps(normalizedEmail);
 
             String otp = generateOtp();
@@ -137,6 +141,12 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(request.getOtp(), latestOtp.getOtpHash())) {
+            int nextFailedAttempts = latestOtp.getFailedAttempts() + 1;
+            latestOtp.setFailedAttempts(nextFailedAttempts);
+            if (nextFailedAttempts >= PASSWORD_RESET_MAX_OTP_ATTEMPTS) {
+                latestOtp.setUsedAt(LocalDateTime.now());
+                throw new BadRequestException("OTP attempt limit exceeded. Request a new code.");
+            }
             throw new BadRequestException("Invalid or expired OTP");
         }
 
@@ -147,6 +157,19 @@ public class AuthService {
 
         log.info("Password reset completed successfully for userId={}", user.getId());
         return "Password reset successfully. You can now sign in.";
+    }
+
+    private void enforceResendCooldown(String email) {
+        passwordResetOtpRepository.findTopByEmailOrderByCreatedAtDesc(email)
+                .filter(otp -> otp.getUsedAt() == null)
+                .filter(otp -> otp.getCreatedAt() != null)
+                .ifPresent(otp -> {
+                    long secondsSinceLastOtp = Duration.between(otp.getCreatedAt(), LocalDateTime.now()).getSeconds();
+                    if (secondsSinceLastOtp < PASSWORD_RESET_RESEND_COOLDOWN_SECONDS) {
+                        long secondsRemaining = PASSWORD_RESET_RESEND_COOLDOWN_SECONDS - secondsSinceLastOtp;
+                        throw new BadRequestException("Please wait " + secondsRemaining + " seconds before requesting another OTP");
+                    }
+                });
     }
 
     private void invalidateActiveOtps(String email) {
