@@ -1,5 +1,7 @@
 package com.quizze.quizze.admin.controller;
 
+import com.quizze.quizze.audit.dto.AdminAuditLogResponse;
+import com.quizze.quizze.audit.service.AdminAuditLogService;
 import com.quizze.quizze.common.api.ApiResponse;
 import com.quizze.quizze.quiz.dto.analytics.QuizPerformanceAnalyticsResponse;
 import com.quizze.quizze.quiz.dto.analytics.AdminOverviewResponse;
@@ -26,9 +28,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
+import com.quizze.quizze.security.user.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -52,6 +56,7 @@ public class AdminController {
     private final QuizAnalyticsService quizAnalyticsService;
     private final QuizLeaderboardService quizLeaderboardService;
     private final QuestionAnalyticsService questionAnalyticsService;
+    private final AdminAuditLogService adminAuditLogService;
 
     @GetMapping("/access-check")
     @Operation(
@@ -147,6 +152,21 @@ public class AdminController {
         ));
     }
 
+    @GetMapping("/audit-logs")
+    @Operation(
+            summary = "Get recent admin audit logs",
+            description = "Returns recent admin actions for quiz and question management.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<java.util.List<AdminAuditLogResponse>>> getAuditLogs(
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Admin audit logs fetched successfully",
+                adminAuditLogService.getRecentLogs(limit)
+        ));
+    }
+
     @PostMapping("/quizzes")
     @Operation(
             summary = "Create quiz",
@@ -182,9 +202,14 @@ public class AdminController {
                             )
                     )
             )
-            @Valid @RequestBody QuizRequest request
+            @Valid @RequestBody QuizRequest request,
+            @AuthenticationPrincipal CustomUserDetails currentUser
     ) {
-        QuizResponse response = adminQuizService.createQuiz(request);
+        QuizResponse response = adminQuizService.createQuiz(
+                currentUser.getUser().getId(),
+                currentUser.getUser().getUsername(),
+                request
+        );
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Quiz created successfully", response));
     }
@@ -197,9 +222,15 @@ public class AdminController {
     )
     public ResponseEntity<ApiResponse<QuizResponse>> updateQuiz(
             @PathVariable @Positive Long id,
-            @Valid @RequestBody QuizRequest request
+            @Valid @RequestBody QuizRequest request,
+            @AuthenticationPrincipal CustomUserDetails currentUser
     ) {
-        QuizResponse response = adminQuizService.updateQuiz(id, request);
+        QuizResponse response = adminQuizService.updateQuiz(
+                currentUser.getUser().getId(),
+                currentUser.getUser().getUsername(),
+                id,
+                request
+        );
         return ResponseEntity.ok(ApiResponse.success("Quiz updated successfully", response));
     }
 
@@ -209,8 +240,15 @@ public class AdminController {
             description = "Deletes a quiz and its associated questions.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<ApiResponse<Void>> deleteQuiz(@PathVariable @Positive Long id) {
-        adminQuizService.deleteQuiz(id);
+    public ResponseEntity<ApiResponse<Void>> deleteQuiz(
+            @PathVariable @Positive Long id,
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        adminQuizService.deleteQuiz(
+                currentUser.getUser().getId(),
+                currentUser.getUser().getUsername(),
+                id
+        );
         return ResponseEntity.ok(ApiResponse.success("Quiz deleted successfully"));
     }
 
@@ -251,9 +289,15 @@ public class AdminController {
                             )
                     )
             )
-            @Valid @RequestBody QuestionRequest request
+            @Valid @RequestBody QuestionRequest request,
+            @AuthenticationPrincipal CustomUserDetails currentUser
     ) {
-        QuestionResponse response = adminQuizService.addQuestion(id, request);
+        QuestionResponse response = adminQuizService.addQuestion(
+                currentUser.getUser().getId(),
+                currentUser.getUser().getUsername(),
+                id,
+                request
+        );
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Question added successfully", response));
     }
@@ -266,9 +310,15 @@ public class AdminController {
     )
     public ResponseEntity<ApiResponse<QuestionResponse>> updateQuestion(
             @PathVariable @Positive Long id,
-            @Valid @RequestBody QuestionRequest request
+            @Valid @RequestBody QuestionRequest request,
+            @AuthenticationPrincipal CustomUserDetails currentUser
     ) {
-        QuestionResponse response = adminQuizService.updateQuestion(id, request);
+        QuestionResponse response = adminQuizService.updateQuestion(
+                currentUser.getUser().getId(),
+                currentUser.getUser().getUsername(),
+                id,
+                request
+        );
         return ResponseEntity.ok(ApiResponse.success("Question updated successfully", response));
     }
 
@@ -278,8 +328,15 @@ public class AdminController {
             description = "Deletes a question from its quiz.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<ApiResponse<Void>> deleteQuestion(@PathVariable @Positive Long id) {
-        adminQuizService.deleteQuestion(id);
+    public ResponseEntity<ApiResponse<Void>> deleteQuestion(
+            @PathVariable @Positive Long id,
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        adminQuizService.deleteQuestion(
+                currentUser.getUser().getId(),
+                currentUser.getUser().getUsername(),
+                id
+        );
         return ResponseEntity.ok(ApiResponse.success("Question deleted successfully"));
     }
 }
