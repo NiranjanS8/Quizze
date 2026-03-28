@@ -4,10 +4,13 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,7 +32,25 @@ public class CacheConfig {
     public static final String USER_PERFORMANCE_CACHE = "userPerformance";
 
     @Bean
-    public CacheManager cacheManager(RedisConnectionFactory redisConnectionFactory, CacheProperties cacheProperties) {
+    public CacheManager cacheManager(
+            ObjectProvider<RedisConnectionFactory> redisConnectionFactoryProvider,
+            CacheProperties cacheProperties
+    ) {
+        if (!cacheProperties.isRedisEnabled()) {
+            return new ConcurrentMapCacheManager(
+                    QUIZ_LEADERBOARD_CACHE,
+                    QUIZ_ANALYTICS_CACHE,
+                    QUESTION_ANALYTICS_CACHE,
+                    ADMIN_OVERVIEW_CACHE,
+                    USER_PERFORMANCE_CACHE
+            );
+        }
+
+        RedisConnectionFactory redisConnectionFactory = redisConnectionFactoryProvider.getIfAvailable();
+        if (redisConnectionFactory == null) {
+            throw new IllegalStateException("Redis cache is enabled but no RedisConnectionFactory is available");
+        }
+
         RedisCacheConfiguration defaultConfiguration = RedisCacheConfiguration.defaultCacheConfig()
                 .disableCachingNullValues()
                 .serializeValuesWith(

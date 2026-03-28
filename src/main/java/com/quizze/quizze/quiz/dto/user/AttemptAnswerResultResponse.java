@@ -11,6 +11,8 @@ public class AttemptAnswerResultResponse {
     private final String questionContent;
     private final Long selectedOptionId;
     private final String selectedOptionContent;
+    private final Long correctOptionId;
+    private final String correctOptionContent;
     private final boolean correct;
     private final Integer points;
 }

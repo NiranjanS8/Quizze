@@ -381,7 +381,10 @@ function AuthPage({ auth, setMessage, setError }) {
   const navigate = useNavigate();
   const [mode, setMode] = useState("login");
   const [loading, setLoading] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
   const isRegister = mode === "register";
+  const isForgotPassword = mode === "forgot";
+  const isResetPassword = mode === "reset";
 
   useEffect(() => {
     setError("");
@@ -414,6 +417,36 @@ function AuthPage({ auth, setMessage, setError }) {
 
         setMode("login");
         setMessage("Account created. Sign in to continue.");
+      } else if (isForgotPassword) {
+        const email = String(formData.get("email") || "");
+
+        await apiRequest("/api/auth/forgot-password", {
+          method: "POST",
+          body: JSON.stringify({
+            email,
+          }),
+        });
+
+        setResetEmail(email);
+        setMode("reset");
+        setMessage("If the account exists, an OTP has been sent to the email address.");
+      } else if (isResetPassword) {
+        if (formData.get("newPassword") !== formData.get("confirmNewPassword")) {
+          throw new Error("Password confirmation does not match");
+        }
+
+        await apiRequest("/api/auth/reset-password", {
+          method: "POST",
+          body: JSON.stringify({
+            email: formData.get("email"),
+            otp: formData.get("otp"),
+            newPassword: formData.get("newPassword"),
+          }),
+        });
+
+        setMode("login");
+        setResetEmail("");
+        setMessage("Password reset successfully. Sign in with your new password.");
       } else {
         const response = await apiRequest("/api/auth/login", {
           method: "POST",
@@ -457,11 +490,23 @@ function AuthPage({ auth, setMessage, setError }) {
         </section>
 
         <Card className="auth-card">
-          <h2 className="section-title">{isRegister ? "Create your account" : "Welcome back"}</h2>
+          <h2 className="section-title">
+            {isRegister
+              ? "Create your account"
+              : isForgotPassword
+                ? "Forgot password"
+                : isResetPassword
+                  ? "Reset password"
+                  : "Welcome back"}
+          </h2>
           <p className="section-copy">
             {isRegister
               ? "Create a new account to start taking quizzes."
-              : "Enter your credentials to access your workspace."}
+              : isForgotPassword
+                ? "Enter your email and we’ll send a one-time password."
+                : isResetPassword
+                  ? "Verify the OTP from your email and choose a new password."
+                  : "Enter your credentials to access your workspace."}
           </p>
 
           <form className="form-grid" onSubmit={handleSubmit}>
@@ -472,18 +517,39 @@ function AuthPage({ auth, setMessage, setError }) {
               </div>
             ) : null}
 
-            <Field
-              icon={isRegister ? "mail" : "person"}
-              label={isRegister ? "Email Address" : "Username or Email"}
-              name={isRegister ? "email" : "usernameOrEmail"}
-            />
-
-            {isRegister ? <Field icon="alternate_email" label="Username" name="username" /> : null}
-            {isRegister ? <Field icon="verified" label="Email Confirmation" name="confirmEmail" /> : null}
-            <Field icon="lock" label="Password" name="password" type="password" />
+            {isRegister ? (
+              <>
+                <Field icon="mail" label="Email Address" name="email" />
+                <Field icon="alternate_email" label="Username" name="username" />
+                <Field icon="verified" label="Email Confirmation" name="confirmEmail" />
+                <Field icon="lock" label="Password" name="password" type="password" />
+              </>
+            ) : isForgotPassword ? (
+              <Field icon="mail" label="Email Address" name="email" type="email" />
+            ) : isResetPassword ? (
+              <>
+                <Field icon="mail" defaultValue={resetEmail} label="Email Address" name="email" type="email" />
+                <Field icon="pin" label="OTP" name="otp" />
+                <Field icon="lock" label="New Password" name="newPassword" type="password" />
+                <Field icon="verified" label="Confirm New Password" name="confirmNewPassword" type="password" />
+              </>
+            ) : (
+              <>
+                <Field icon="person" label="Username or Email" name="usernameOrEmail" />
+                <Field icon="lock" label="Password" name="password" type="password" />
+              </>
+            )}
 
             <Button className="primary-btn" disabled={loading} type="submit">
-              {loading ? "Please wait..." : isRegister ? "Create Account" : "Sign In"}
+              {loading
+                ? "Please wait..."
+                : isRegister
+                  ? "Create Account"
+                  : isForgotPassword
+                    ? "Send OTP"
+                    : isResetPassword
+                      ? "Reset Password"
+                      : "Sign In"}
             </Button>
           </form>
 
@@ -493,6 +559,26 @@ function AuthPage({ auth, setMessage, setError }) {
               {isRegister ? "Sign In" : "Create an account"}
             </button>
           </div>
+
+          {!isRegister ? (
+            <div className="auth-secondary-actions">
+              {!isForgotPassword ? (
+                <button className="auth-inline-btn" onClick={() => setMode("forgot")} type="button">
+                  Forgot password?
+                </button>
+              ) : null}
+              {isForgotPassword || isResetPassword ? (
+                <button className="auth-inline-btn" onClick={() => setMode("login")} type="button">
+                  Back to sign in
+                </button>
+              ) : null}
+              {isResetPassword ? (
+                <button className="auth-inline-btn" onClick={() => setMode("forgot")} type="button">
+                  Resend OTP
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </Card>
       </main>
     </div>
@@ -1233,8 +1319,13 @@ function ResultDetailPage({ auth, setError }) {
                 <span className={`badge ${answer.correct ? "live" : "draft"}`}>{answer.correct ? "Correct" : "Incorrect"}</span>
               </div>
               <div className="review-question">{answer.questionContent}</div>
-              <div className={answer.correct ? "notice" : "error-banner"} style={{ marginTop: 14 }}>
-                Your answer: {answer.selectedOptionContent || "No answer"}
+              <div className="review-answer-stack">
+                <div className={answer.correct ? "notice review-answer-banner" : "error-banner review-answer-banner"}>
+                  Your answer: {answer.selectedOptionContent || "No answer"}
+                </div>
+                <div className={`review-correct-answer${answer.correct ? "" : " incorrect"}`}>
+                  Correct answer: {answer.correctOptionContent || "Unavailable"}
+                </div>
               </div>
             </div>
           ))}

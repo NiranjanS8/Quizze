@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.cache")
 public class CacheProperties {
 
+    private boolean redisEnabled;
     private long quizLeaderboardTtlMinutes = 10;
     private long quizAnalyticsTtlMinutes = 15;
     private long questionAnalyticsTtlMinutes = 15;

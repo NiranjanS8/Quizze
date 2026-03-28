@@ -1,8 +1,10 @@
 package com.quizze.quizze.auth.controller;
 
 import com.quizze.quizze.auth.dto.AuthResponse;
+import com.quizze.quizze.auth.dto.ForgotPasswordRequest;
 import com.quizze.quizze.auth.dto.LoginRequest;
 import com.quizze.quizze.auth.dto.RegisterRequest;
+import com.quizze.quizze.auth.dto.ResetPasswordRequest;
 import com.quizze.quizze.auth.service.AuthService;
 import com.quizze.quizze.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -96,5 +98,69 @@ public class AuthController {
     ) {
         AuthResponse response = authService.login(request);
         return ResponseEntity.ok(com.quizze.quizze.common.api.ApiResponse.success("Login successful", response));
+    }
+
+    @PostMapping("/forgot-password")
+    @Operation(
+            summary = "Send password reset OTP",
+            description = "Generates a short-lived OTP and emails it to the user if the account exists."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OTP flow handled successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request body", content = @Content)
+    })
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    description = "Forgot password payload",
+                    content = @Content(
+                            schema = @Schema(implementation = ForgotPasswordRequest.class),
+                            examples = @ExampleObject(
+                                    name = "Forgot password request",
+                                    value = """
+                                            {
+                                              "email": "niranjan@example.com"
+                                            }
+                                            """
+                            )
+                    )
+            )
+            @Valid @RequestBody ForgotPasswordRequest request
+    ) {
+        String message = authService.forgotPassword(request);
+        return ResponseEntity.ok(ApiResponse.success(message));
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(
+            summary = "Reset password using OTP",
+            description = "Verifies the email and OTP combination, then updates the user's password."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Password reset successful"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request body or OTP", content = @Content)
+    })
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    description = "Reset password payload",
+                    content = @Content(
+                            schema = @Schema(implementation = ResetPasswordRequest.class),
+                            examples = @ExampleObject(
+                                    name = "Reset password request",
+                                    value = """
+                                            {
+                                              "email": "niranjan@example.com",
+                                              "otp": "123456",
+                                              "newPassword": "Password123"
+                                            }
+                                            """
+                            )
+                    )
+            )
+            @Valid @RequestBody ResetPasswordRequest request
+    ) {
+        String message = authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.success(message));
     }
 }

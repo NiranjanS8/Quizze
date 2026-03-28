@@ -432,6 +432,24 @@ button {
   padding: 0;
 }
 
+.auth-secondary-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.auth-inline-btn {
+  padding: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border: 0;
+}
+
+.auth-inline-btn:hover {
+  color: var(--secondary);
+}
+
 .layout {
   display: flex;
   min-height: 100vh;
@@ -947,6 +965,30 @@ tbody tr {
   margin-top: 12px;
   font-size: 15px;
   font-weight: 600;
+}
+
+.review-answer-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.review-answer-banner {
+  margin-top: 0 !important;
+}
+
+.review-correct-answer {
+  padding: 14px 16px;
+  border: 1px solid rgba(190, 215, 84, 0.22);
+  border-radius: 8px;
+  background: rgba(190, 215, 84, 0.08);
+  color: var(--success);
+  font-weight: 600;
+}
+
+.review-correct-answer.incorrect {
+  border-color: rgba(190, 215, 84, 0.28);
+  background: rgba(190, 215, 84, 0.1);
 }
 
 .badge {

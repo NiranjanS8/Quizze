@@ -232,11 +232,18 @@ public class UserQuizMapper {
     }
 
     private AttemptAnswerResultResponse toAttemptAnswerResultResponse(AttemptAnswer answer) {
+        Option correctOption = answer.getQuestion().getOptions().stream()
+                .filter(Option::isCorrect)
+                .findFirst()
+                .orElse(null);
+
         return AttemptAnswerResultResponse.builder()
                 .questionId(answer.getQuestion().getId())
                 .questionContent(answer.getQuestion().getContent())
                 .selectedOptionId(answer.getSelectedOption() == null ? null : answer.getSelectedOption().getId())
                 .selectedOptionContent(answer.getSelectedOption() == null ? null : answer.getSelectedOption().getContent())
+                .correctOptionId(correctOption == null ? null : correctOption.getId())
+                .correctOptionContent(correctOption == null ? null : correctOption.getContent())
                 .correct(Boolean.TRUE.equals(answer.getCorrect()))
                 .points(answer.getQuestion().getPoints())
                 .build();
