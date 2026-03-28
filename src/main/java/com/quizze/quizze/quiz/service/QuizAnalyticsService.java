@@ -11,10 +11,12 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class QuizAnalyticsService {
 
@@ -23,6 +25,7 @@ public class QuizAnalyticsService {
 
     @Transactional(readOnly = true)
     public QuizPerformanceAnalyticsResponse getQuizPerformanceAnalytics(Long quizId) {
+        log.debug("Fetching quiz performance analytics for quizId={}", quizId);
         Quiz quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found with id: " + quizId));
 
@@ -56,6 +59,7 @@ public class QuizAnalyticsService {
                 .orElse(null);
 
         double completionRate = totalAttempts == 0 ? 0.0 : (submittedCount * 100.0) / totalAttempts;
+        log.debug("Quiz analytics computed for quizId={} with totalAttempts={} and submittedAttempts={}", quizId, totalAttempts, submittedCount);
 
         return QuizPerformanceAnalyticsResponse.builder()
                 .quizId(quiz.getId())

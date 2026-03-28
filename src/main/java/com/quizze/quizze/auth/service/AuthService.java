@@ -13,6 +13,7 @@ import com.quizze.quizze.user.repository.RoleRepository;
 import com.quizze.quizze.user.repository.UserRepository;
 import jakarta.persistence.EntityExistsException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AuthService {
 
@@ -36,12 +38,15 @@ public class AuthService {
     public AuthResponse register(RegisterRequest request) {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
         String normalizedUsername = request.getUsername().trim();
+        log.info("Registering new user with username='{}' and email='{}'", normalizedUsername, normalizedEmail);
 
         if (userRepository.existsByEmail(normalizedEmail)) {
+            log.warn("Registration blocked because email already exists: {}", normalizedEmail);
             throw new EntityExistsException("Email is already in use");
         }
 
         if (userRepository.existsByUsername(normalizedUsername)) {
+            log.warn("Registration blocked because username already exists: {}", normalizedUsername);
             throw new EntityExistsException("Username is already in use");
         }
 
@@ -58,18 +63,22 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
         String token = jwtService.generateToken(savedUser.getId(), savedUser.getUsername(), savedUser.getRole().getName().name());
+        log.info("User registered successfully with userId={} and role={}", savedUser.getId(), savedUser.getRole().getName());
 
         return authMapper.toAuthResponse(savedUser, token);
     }
 
     public AuthResponse login(LoginRequest request) {
+        String principalInput = request.getUsernameOrEmail().trim();
+        log.info("Authenticating user with principal='{}'", principalInput);
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsernameOrEmail().trim(), request.getPassword())
+                new UsernamePasswordAuthenticationToken(principalInput, request.getPassword())
         );
 
         CustomUserDetails principal = (CustomUserDetails) authentication.getPrincipal();
         User user = principal.getUser();
         String token = jwtService.generateToken(user.getId(), user.getUsername(), user.getRole().getName().name());
+        log.info("User authenticated successfully with userId={} and role={}", user.getId(), user.getRole().getName());
 
         return authMapper.toAuthResponse(user, token);
     }

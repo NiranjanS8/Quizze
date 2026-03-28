@@ -39,6 +39,7 @@ import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -48,6 +49,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class UserQuizService {
 
@@ -68,6 +70,10 @@ public class UserQuizService {
             String sortBy,
             String sortDir
     ) {
+        log.debug(
+                "Fetching published quizzes with search='{}', category='{}', difficulty='{}', page={}, size={}, sortBy='{}', sortDir='{}'",
+                search, category, difficulty, page, size, sortBy, sortDir
+        );
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 Math.min(Math.max(size, 1), 50),
@@ -80,18 +86,21 @@ public class UserQuizService {
                 .and(matchesDifficulty(difficulty));
 
         Page<Quiz> quizPage = quizRepository.findAll(specification, pageable);
+        log.debug("Published quiz query returned {} items on page {}", quizPage.getNumberOfElements(), quizPage.getNumber());
 
         return userQuizMapper.toQuizCatalogResponse(quizPage, quizRepository.findPublishedCategoryNames());
     }
 
     @Transactional(readOnly = true)
     public QuizDetailResponse getPublishedQuizDetails(Long quizId) {
+        log.debug("Fetching published quiz details for quizId={}", quizId);
         Quiz quiz = getPublishedQuiz(quizId);
         return userQuizMapper.toQuizDetailResponse(quiz);
     }
 
     @Transactional
     public StartQuizResponse startQuiz(Long quizId, Long userId) {
+        log.info("Starting quiz attempt for userId={} and quizId={}", userId, quizId);
         Quiz quiz = getPublishedQuiz(quizId);
         User user = getUser(userId);
 
@@ -112,12 +121,14 @@ public class UserQuizService {
 
         QuizAttempt savedAttempt = quizAttemptRepository.save(attempt);
         LocalDateTime expiresAt = calculateExpiresAt(savedAttempt);
+        log.info("Quiz attempt started with attemptId={} for userId={} and quizId={}", savedAttempt.getId(), userId, quizId);
 
         return userQuizMapper.toStartQuizResponse(savedAttempt, expiresAt);
     }
 
     @Transactional(readOnly = true)
     public AttemptQuestionsResponse getAttemptQuestions(Long attemptId, Long userId) {
+        log.debug("Fetching attempt questions for attemptId={} and userId={}", attemptId, userId);
         QuizAttempt attempt = getUserAttempt(attemptId, userId);
 
         if (attempt.getStatus() == AttemptStatus.NOT_STARTED) {
@@ -137,6 +148,7 @@ public class UserQuizService {
 
     @Transactional
     public SubmitQuizResponse submitQuiz(Long attemptId, Long userId, SubmitQuizRequest request) {
+        log.info("Submitting quiz attemptId={} for userId={} with {} answers", attemptId, userId, request.getAnswers().size());
         QuizAttempt attempt = getUserAttempt(attemptId, userId);
 
         if (attempt.getStatus() != AttemptStatus.IN_PROGRESS) {
@@ -195,6 +207,10 @@ public class UserQuizService {
         attempt.setWrongAnswers(wrongAnswers);
         attempt.setStatus(AttemptStatus.SUBMITTED);
         attempt.setSubmittedAt(LocalDateTime.now());
+        log.info(
+                "Quiz submitted successfully for attemptId={} with score={}, correctAnswers={}, wrongAnswers={}, timeExpired={}",
+                attempt.getId(), attempt.getScore(), correctAnswers, wrongAnswers, timeExpired
+        );
 
         return userQuizMapper.toSubmitQuizResponse(
                 attempt,
@@ -206,6 +222,7 @@ public class UserQuizService {
 
     @Transactional(readOnly = true)
     public List<AttemptHistoryResponse> getAttemptHistory(Long userId) {
+        log.debug("Fetching attempt history for userId={}", userId);
         return quizAttemptRepository.findByUserId(userId).stream()
                 .sorted(Comparator.comparing(QuizAttempt::getCreatedAt).reversed())
                 .map(this::toAttemptHistoryResponse)
@@ -214,6 +231,7 @@ public class UserQuizService {
 
     @Transactional(readOnly = true)
     public List<QuizResultResponse> getResultHistory(Long userId) {
+        log.debug("Fetching result history for userId={}", userId);
         return quizAttemptRepository.findByUserId(userId).stream()
                 .filter(attempt -> attempt.getStatus() == AttemptStatus.SUBMITTED)
                 .sorted(Comparator.comparing(QuizAttempt::getSubmittedAt).reversed())
@@ -223,6 +241,7 @@ public class UserQuizService {
 
     @Transactional(readOnly = true)
     public QuizResultResponse getAttemptResult(Long attemptId, Long userId) {
+        log.debug("Fetching attempt result for attemptId={} and userId={}", attemptId, userId);
         QuizAttempt attempt = getUserAttempt(attemptId, userId);
         if (attempt.getStatus() != AttemptStatus.SUBMITTED) {
             throw new BadRequestException("Result is available only after the quiz is submitted");
@@ -232,6 +251,7 @@ public class UserQuizService {
 
     @Transactional(readOnly = true)
     public UserPerformanceAnalyticsResponse getUserPerformanceAnalytics(Long userId) {
+        log.debug("Fetching user performance analytics for userId={}", userId);
         List<QuizAttempt> submittedAttempts = quizAttemptRepository.findByUserId(userId).stream()
                 .filter(attempt -> attempt.getStatus() == AttemptStatus.SUBMITTED)
                 .sorted(Comparator.comparing(QuizAttempt::getSubmittedAt, Comparator.nullsLast(Comparator.reverseOrder())))

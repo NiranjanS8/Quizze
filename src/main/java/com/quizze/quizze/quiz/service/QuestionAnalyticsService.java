@@ -11,10 +11,12 @@ import com.quizze.quizze.quiz.repository.QuizRepository;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class QuestionAnalyticsService {
 
@@ -23,6 +25,7 @@ public class QuestionAnalyticsService {
 
     @Transactional(readOnly = true)
     public QuestionAnalyticsResponse getQuestionAnalytics(Long quizId) {
+        log.debug("Fetching question analytics for quizId={}", quizId);
         Quiz quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found with id: " + quizId));
 
@@ -44,6 +47,7 @@ public class QuestionAnalyticsService {
                         .thenComparing(QuestionAnalyticsItemResponse::getTotalAnswers, Comparator.reverseOrder()))
                 .limit(5)
                 .toList();
+        log.debug("Question analytics computed for quizId={} with {} analyzed questions", quizId, items.size());
 
         return QuestionAnalyticsResponse.builder()
                 .quizId(quiz.getId())

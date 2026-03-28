@@ -14,10 +14,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class QuizLeaderboardService {
 
@@ -26,6 +28,7 @@ public class QuizLeaderboardService {
 
     @Transactional(readOnly = true)
     public QuizLeaderboardResponse getLeaderboard(Long quizId, int limit, boolean requirePublished) {
+        log.debug("Fetching leaderboard for quizId={}, limit={}, requirePublished={}", quizId, limit, requirePublished);
         Quiz quiz = requirePublished ? getPublishedQuiz(quizId) : getQuiz(quizId);
         int normalizedLimit = Math.min(Math.max(limit, 1), 50);
 
@@ -50,6 +53,7 @@ public class QuizLeaderboardService {
                 .limit(normalizedLimit)
                 .map(attempt -> mapEntry(attempt, maxScore, rankedAttempts))
                 .toList();
+        log.debug("Leaderboard built for quizId={} with {} ranked users and {} returned entries", quizId, rankedAttempts.size(), entries.size());
 
         return QuizLeaderboardResponse.builder()
                 .quizId(quiz.getId())

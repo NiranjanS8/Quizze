@@ -11,10 +11,12 @@ import com.quizze.quizze.user.repository.UserRepository;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AdminOverviewService {
 
@@ -24,6 +26,7 @@ public class AdminOverviewService {
 
     @Transactional(readOnly = true)
     public AdminOverviewResponse getOverview() {
+        log.debug("Fetching admin overview analytics");
         List<Quiz> quizzes = quizRepository.findAll();
         List<QuizAttempt> attempts = quizAttemptRepository.findAll();
         List<QuizAttempt> submittedAttempts = attempts.stream()
@@ -48,6 +51,7 @@ public class AdminOverviewService {
 
         long totalQuizzes = quizzes.size();
         long publishedQuizzes = quizzes.stream().filter(Quiz::isPublished).count();
+        log.debug("Admin overview computed with totalUsers={}, totalQuizzes={}, totalAttempts={}", userRepository.count(), totalQuizzes, attempts.size());
 
         return AdminOverviewResponse.builder()
                 .totalUsers(userRepository.count())
