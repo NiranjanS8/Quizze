@@ -2,6 +2,7 @@ package com.quizze.quizze.quiz.service;
 
 import com.quizze.quizze.audit.domain.AuditActionType;
 import com.quizze.quizze.audit.service.AdminAuditLogService;
+import com.quizze.quizze.cache.service.QuizCacheInvalidationService;
 import com.quizze.quizze.common.exception.BadRequestException;
 import com.quizze.quizze.common.exception.ResourceNotFoundException;
 import com.quizze.quizze.quiz.domain.Category;
@@ -36,6 +37,7 @@ public class AdminQuizService {
     private final CategoryRepository categoryRepository;
     private final AdminQuizMapper adminQuizMapper;
     private final AdminAuditLogService adminAuditLogService;
+    private final QuizCacheInvalidationService quizCacheInvalidationService;
 
     @Transactional
     public QuizResponse createQuiz(Long adminUserId, String adminUsername, QuizRequest request) {
@@ -52,6 +54,7 @@ public class AdminQuizService {
                 savedQuiz.getTitle(),
                 "Created quiz '" + savedQuiz.getTitle() + "'"
         );
+        quizCacheInvalidationService.evictAnalyticsForQuiz(savedQuiz.getId());
         log.info("Quiz created successfully with quizId={}", savedQuiz.getId());
         return adminQuizMapper.toQuizResponse(savedQuiz);
     }
@@ -87,6 +90,7 @@ public class AdminQuizService {
                 quiz.getTitle(),
                 "Updated quiz '" + previousTitle + "' to '" + quiz.getTitle() + "'"
         );
+        quizCacheInvalidationService.evictAnalyticsForQuiz(quiz.getId());
         log.info("Quiz updated successfully for quizId={}", quizId);
         return adminQuizMapper.toQuizResponse(quiz);
     }
@@ -106,6 +110,7 @@ public class AdminQuizService {
                 "Deleted quiz '" + quizTitle + "'"
         );
         quizRepository.delete(quiz);
+        quizCacheInvalidationService.evictAnalyticsForQuiz(quizId);
         log.info("Quiz deleted successfully for quizId={}", quizId);
     }
 
@@ -128,6 +133,7 @@ public class AdminQuizService {
                 truncateForAudit(savedQuestion.getContent()),
                 "Added question to quiz '" + quiz.getTitle() + "'"
         );
+        quizCacheInvalidationService.evictAnalyticsForQuiz(quizId);
         log.info("Question added successfully with questionId={} to quizId={}", savedQuestion.getId(), quizId);
 
         return adminQuizMapper.toQuestionResponse(savedQuestion);
@@ -151,6 +157,7 @@ public class AdminQuizService {
                 truncateForAudit(question.getContent()),
                 "Updated question '" + truncateForAudit(previousContent) + "'"
         );
+        quizCacheInvalidationService.evictAnalyticsForQuiz(question.getQuiz().getId());
         log.info("Question updated successfully for questionId={}", questionId);
 
         return adminQuizMapper.toQuestionResponse(question);
@@ -172,7 +179,9 @@ public class AdminQuizService {
                 truncateForAudit(questionContent),
                 "Deleted question from quiz '" + question.getQuiz().getTitle() + "'"
         );
+        Long quizId = question.getQuiz().getId();
         questionRepository.delete(question);
+        quizCacheInvalidationService.evictAnalyticsForQuiz(quizId);
         log.info("Question deleted successfully for questionId={}", questionId);
     }
 

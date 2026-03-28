@@ -1,5 +1,8 @@
 package com.quizze.quizze.quiz.service;
 
+import static com.quizze.quizze.cache.config.CacheConfig.USER_PERFORMANCE_CACHE;
+
+import com.quizze.quizze.cache.service.QuizCacheInvalidationService;
 import com.quizze.quizze.common.exception.BadRequestException;
 import com.quizze.quizze.common.exception.ResourceNotFoundException;
 import com.quizze.quizze.quiz.domain.AttemptAnswer;
@@ -40,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -59,6 +63,7 @@ public class UserQuizService {
     private final QuizAttemptRepository quizAttemptRepository;
     private final UserRepository userRepository;
     private final UserQuizMapper userQuizMapper;
+    private final QuizCacheInvalidationService quizCacheInvalidationService;
 
     @Transactional(readOnly = true)
     public QuizCatalogResponse getPublishedQuizzes(
@@ -211,6 +216,7 @@ public class UserQuizService {
                 "Quiz submitted successfully for attemptId={} with score={}, correctAnswers={}, wrongAnswers={}, timeExpired={}",
                 attempt.getId(), attempt.getScore(), correctAnswers, wrongAnswers, timeExpired
         );
+        quizCacheInvalidationService.evictAfterQuizSubmission(attempt.getQuiz().getId(), userId);
 
         return userQuizMapper.toSubmitQuizResponse(
                 attempt,
@@ -250,6 +256,7 @@ public class UserQuizService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = USER_PERFORMANCE_CACHE, key = "#userId")
     public UserPerformanceAnalyticsResponse getUserPerformanceAnalytics(Long userId) {
         log.debug("Fetching user performance analytics for userId={}", userId);
         List<QuizAttempt> submittedAttempts = quizAttemptRepository.findByUserId(userId).stream()

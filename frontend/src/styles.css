@@ -30,6 +30,10 @@ body {
   line-height: 1.5;
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -431,6 +435,7 @@ button {
 .layout {
   display: flex;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -517,7 +522,10 @@ button {
 .main {
   flex: 1;
   min-width: 0;
+  min-height: 100vh;
   margin-left: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .action-group {
@@ -534,10 +542,16 @@ button {
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: grid;
+  display: none;
   place-items: center;
   padding: 20px;
   background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.modal-backdrop.is-visible {
+  display: grid;
+  pointer-events: auto;
 }
 
 .modal-card {

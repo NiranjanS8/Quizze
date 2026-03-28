@@ -1,5 +1,7 @@
 package com.quizze.quizze.quiz.service;
 
+import static com.quizze.quizze.cache.config.CacheConfig.QUIZ_LEADERBOARD_CACHE;
+
 import com.quizze.quizze.common.exception.ResourceNotFoundException;
 import com.quizze.quizze.quiz.domain.AttemptStatus;
 import com.quizze.quizze.quiz.domain.Quiz;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +30,7 @@ public class QuizLeaderboardService {
     private final QuizAttemptRepository quizAttemptRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = QUIZ_LEADERBOARD_CACHE, key = "#quizId + ':' + #limit + ':' + #requirePublished")
     public QuizLeaderboardResponse getLeaderboard(Long quizId, int limit, boolean requirePublished) {
         log.debug("Fetching leaderboard for quizId={}, limit={}, requirePublished={}", quizId, limit, requirePublished);
         Quiz quiz = requirePublished ? getPublishedQuiz(quizId) : getQuiz(quizId);

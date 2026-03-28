@@ -1,5 +1,7 @@
 package com.quizze.quizze.quiz.service;
 
+import static com.quizze.quizze.cache.config.CacheConfig.ADMIN_OVERVIEW_CACHE;
+
 import com.quizze.quizze.quiz.domain.AttemptStatus;
 import com.quizze.quizze.quiz.domain.Quiz;
 import com.quizze.quizze.quiz.domain.QuizAttempt;
@@ -12,6 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +28,7 @@ public class AdminOverviewService {
     private final QuizAttemptRepository quizAttemptRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = ADMIN_OVERVIEW_CACHE, key = "'overview'")
     public AdminOverviewResponse getOverview() {
         log.debug("Fetching admin overview analytics");
         List<Quiz> quizzes = quizRepository.findAll();

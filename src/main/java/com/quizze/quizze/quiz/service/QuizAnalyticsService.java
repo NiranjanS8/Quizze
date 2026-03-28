@@ -1,5 +1,7 @@
 package com.quizze.quizze.quiz.service;
 
+import static com.quizze.quizze.cache.config.CacheConfig.QUIZ_ANALYTICS_CACHE;
+
 import com.quizze.quizze.common.exception.ResourceNotFoundException;
 import com.quizze.quizze.quiz.domain.AttemptStatus;
 import com.quizze.quizze.quiz.domain.Quiz;
@@ -12,6 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +27,7 @@ public class QuizAnalyticsService {
     private final QuizAttemptRepository quizAttemptRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = QUIZ_ANALYTICS_CACHE, key = "#quizId")
     public QuizPerformanceAnalyticsResponse getQuizPerformanceAnalytics(Long quizId) {
         log.debug("Fetching quiz performance analytics for quizId={}", quizId);
         Quiz quiz = quizRepository.findById(quizId)

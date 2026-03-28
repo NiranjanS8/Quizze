@@ -279,6 +279,14 @@ function ProtectedLayout({ auth, message, setMessage, error, setError }) {
   const navigate = useNavigate();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  useEffect(() => {
+    document.body.classList.toggle("modal-open", showLogoutConfirm);
+
+    return () => {
+      document.body.classList.remove("modal-open");
+    };
+  }, [showLogoutConfirm]);
+
   if (!auth.isAuthenticated) {
     return <Navigate to="/auth" replace />;
   }
@@ -340,7 +348,7 @@ function ProtectedLayout({ auth, message, setMessage, error, setError }) {
       </div>
 
       {showLogoutConfirm ? (
-        <div className="modal-backdrop" onClick={() => setShowLogoutConfirm(false)} role="presentation">
+        <div className="modal-backdrop is-visible" onClick={() => setShowLogoutConfirm(false)} role="presentation">
           <div className="modal-card" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="logout-title">
             <h3 className="panel-title" id="logout-title">Log out?</h3>
             <p className="muted modal-copy">You’ll need to sign in again to continue your quiz session and dashboard access.</p>
