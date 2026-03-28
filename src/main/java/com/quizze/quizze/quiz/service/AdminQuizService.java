@@ -7,16 +7,18 @@ import com.quizze.quizze.quiz.domain.Option;
 import com.quizze.quizze.quiz.domain.Question;
 import com.quizze.quizze.quiz.domain.Quiz;
 import com.quizze.quizze.quiz.dto.admin.OptionRequest;
-import com.quizze.quizze.quiz.dto.admin.OptionResponse;
 import com.quizze.quizze.quiz.dto.admin.QuestionRequest;
 import com.quizze.quizze.quiz.dto.admin.QuestionResponse;
 import com.quizze.quizze.quiz.dto.admin.QuizRequest;
 import com.quizze.quizze.quiz.dto.admin.QuizResponse;
+import com.quizze.quizze.quiz.mapper.AdminQuizMapper;
 import com.quizze.quizze.quiz.repository.CategoryRepository;
 import com.quizze.quizze.quiz.repository.QuestionRepository;
 import com.quizze.quizze.quiz.repository.QuizRepository;
 import java.util.Comparator;
+import java.util.Locale;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,13 +30,14 @@ public class AdminQuizService {
     private final QuizRepository quizRepository;
     private final QuestionRepository questionRepository;
     private final CategoryRepository categoryRepository;
+    private final AdminQuizMapper adminQuizMapper;
 
     @Transactional
     public QuizResponse createQuiz(QuizRequest request) {
         Quiz quiz = new Quiz();
         applyQuizDetails(quiz, request);
         Quiz savedQuiz = quizRepository.save(quiz);
-        return mapQuizResponse(savedQuiz);
+        return adminQuizMapper.toQuizResponse(savedQuiz);
     }
 
     @Transactional(readOnly = true)
@@ -42,20 +45,20 @@ public class AdminQuizService {
         return quizRepository.findAll()
                 .stream()
                 .sorted(Comparator.comparing(Quiz::getCreatedAt).reversed())
-                .map(this::mapQuizResponse)
+                .map(adminQuizMapper::toQuizResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public QuizResponse getQuiz(Long quizId) {
-        return mapQuizResponse(getQuizEntity(quizId));
+        return adminQuizMapper.toQuizResponse(getQuizEntity(quizId));
     }
 
     @Transactional
     public QuizResponse updateQuiz(Long quizId, QuizRequest request) {
         Quiz quiz = getQuizEntity(quizId);
         applyQuizDetails(quiz, request);
-        return mapQuizResponse(quiz);
+        return adminQuizMapper.toQuizResponse(quiz);
     }
 
     @Transactional
@@ -74,7 +77,7 @@ public class AdminQuizService {
         applyQuestionDetails(question, request);
         Question savedQuestion = questionRepository.save(question);
 
-        return mapQuestionResponse(savedQuestion);
+        return adminQuizMapper.toQuestionResponse(savedQuestion);
     }
 
     @Transactional
@@ -85,7 +88,7 @@ public class AdminQuizService {
         validateQuestionOptions(request);
         applyQuestionDetails(question, request);
 
-        return mapQuestionResponse(question);
+        return adminQuizMapper.toQuestionResponse(question);
     }
 
     @Transactional
@@ -146,48 +149,16 @@ public class AdminQuizService {
                 .filter(OptionRequest::isCorrect)
                 .count();
 
+        Set<String> normalizedOptions = request.getOptions().stream()
+                .map(option -> option.getContent().trim().toLowerCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toSet());
+
         if (correctOptionCount != 1) {
             throw new BadRequestException("A question must have exactly one correct option");
         }
-    }
 
-    private QuizResponse mapQuizResponse(Quiz quiz) {
-        List<QuestionResponse> questions = quiz.getQuestions()
-                .stream()
-                .sorted(Comparator.comparing(Question::getId))
-                .map(this::mapQuestionResponse)
-                .toList();
-
-        return QuizResponse.builder()
-                .id(quiz.getId())
-                .title(quiz.getTitle())
-                .description(quiz.getDescription())
-                .categoryName(quiz.getCategory() == null ? null : quiz.getCategory().getName())
-                .difficulty(quiz.getDifficulty())
-                .timeLimitInMinutes(quiz.getTimeLimitInMinutes())
-                .published(quiz.isPublished())
-                .negativeMarkingEnabled(quiz.isNegativeMarkingEnabled())
-                .oneAttemptOnly(quiz.isOneAttemptOnly())
-                .questions(questions)
-                .build();
-    }
-
-    private QuestionResponse mapQuestionResponse(Question question) {
-        List<OptionResponse> options = question.getOptions()
-                .stream()
-                .sorted(Comparator.comparing(Option::getId))
-                .map(option -> OptionResponse.builder()
-                        .id(option.getId())
-                        .content(option.getContent())
-                        .correct(option.isCorrect())
-                        .build())
-                .toList();
-
-        return QuestionResponse.builder()
-                .id(question.getId())
-                .content(question.getContent())
-                .points(question.getPoints())
-                .options(options)
-                .build();
+        if (normalizedOptions.size() != request.getOptions().size()) {
+            throw new BadRequestException("Question options must be unique");
+        }
     }
 }

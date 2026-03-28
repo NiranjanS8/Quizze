@@ -14,7 +14,7 @@ import lombok.Setter;
 public class QuizRequest {
 
     @NotBlank(message = "Quiz title is required")
-    @Size(max = 150, message = "Quiz title must not exceed 150 characters")
+    @Size(min = 3, max = 150, message = "Quiz title must be between 3 and 150 characters")
     private String title;
 
     @Size(max = 1000, message = "Quiz description must not exceed 1000 characters")
@@ -26,6 +26,7 @@ public class QuizRequest {
     @NotNull(message = "Difficulty is required")
     private DifficultyLevel difficulty;
 
+    @NotNull(message = "Time limit is required")
     @Min(value = 0, message = "Time limit must be zero or greater")
     @Max(value = 300, message = "Time limit must not exceed 300 minutes")
     private Integer timeLimitInMinutes;

@@ -7,6 +7,7 @@ import com.quizze.quizze.quiz.dto.user.UserPerformanceAnalyticsResponse;
 import com.quizze.quizze.quiz.service.UserQuizService;
 import com.quizze.quizze.security.user.CustomUserDetails;
 import com.quizze.quizze.user.dto.UserProfileResponse;
+import com.quizze.quizze.user.mapper.UserProfileMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -25,6 +26,7 @@ import java.util.List;
 public class UserController {
 
     private final UserQuizService userQuizService;
+    private final UserProfileMapper userProfileMapper;
 
     @GetMapping("/me")
     @Operation(
@@ -40,14 +42,7 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserProfileResponse>> getCurrentUser(
             @AuthenticationPrincipal CustomUserDetails currentUser
     ) {
-        UserProfileResponse response = UserProfileResponse.builder()
-                .id(currentUser.getUser().getId())
-                .firstName(currentUser.getUser().getFirstName())
-                .lastName(currentUser.getUser().getLastName())
-                .username(currentUser.getUser().getUsername())
-                .email(currentUser.getUser().getEmail())
-                .role(currentUser.getUser().getRole().getName().name())
-                .build();
+        UserProfileResponse response = userProfileMapper.toResponse(currentUser.getUser());
 
         return ResponseEntity.ok(ApiResponse.success("User profile fetched successfully", response));
     }

@@ -23,9 +23,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Map;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,6 +43,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "Admin Quiz Management", description = "Admin-only endpoints for managing quizzes and questions")
 public class AdminController {
 
@@ -93,7 +98,7 @@ public class AdminController {
             description = "Returns full quiz metadata and questions for an admin-managed quiz.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<ApiResponse<QuizResponse>> getQuiz(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<QuizResponse>> getQuiz(@PathVariable @Positive Long id) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Quiz fetched successfully",
                 adminQuizService.getQuiz(id)
@@ -107,8 +112,8 @@ public class AdminController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     public ResponseEntity<ApiResponse<QuizLeaderboardResponse>> getQuizLeaderboard(
-            @PathVariable Long id,
-            @RequestParam(defaultValue = "10") int limit
+            @PathVariable @Positive Long id,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int limit
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Quiz leaderboard fetched successfully",
@@ -122,7 +127,7 @@ public class AdminController {
             description = "Returns quiz-level attempt and scoring analytics for admin reporting.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<ApiResponse<QuizPerformanceAnalyticsResponse>> getQuizAnalytics(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<QuizPerformanceAnalyticsResponse>> getQuizAnalytics(@PathVariable @Positive Long id) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Quiz analytics fetched successfully",
                 quizAnalyticsService.getQuizPerformanceAnalytics(id)
@@ -135,7 +140,7 @@ public class AdminController {
             description = "Returns hardest and easiest questions for a quiz based on submitted answer accuracy.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<ApiResponse<QuestionAnalyticsResponse>> getQuestionAnalytics(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<QuestionAnalyticsResponse>> getQuestionAnalytics(@PathVariable @Positive Long id) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Question analytics fetched successfully",
                 questionAnalyticsService.getQuestionAnalytics(id)
@@ -191,7 +196,7 @@ public class AdminController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     public ResponseEntity<ApiResponse<QuizResponse>> updateQuiz(
-            @PathVariable Long id,
+            @PathVariable @Positive Long id,
             @Valid @RequestBody QuizRequest request
     ) {
         QuizResponse response = adminQuizService.updateQuiz(id, request);
@@ -204,7 +209,7 @@ public class AdminController {
             description = "Deletes a quiz and its associated questions.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<ApiResponse<Void>> deleteQuiz(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteQuiz(@PathVariable @Positive Long id) {
         adminQuizService.deleteQuiz(id);
         return ResponseEntity.ok(ApiResponse.success("Quiz deleted successfully"));
     }
@@ -223,7 +228,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Quiz not found", content = @Content)
     })
     public ResponseEntity<ApiResponse<QuestionResponse>> addQuestion(
-            @PathVariable Long id,
+            @PathVariable @Positive Long id,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
                     description = "Question creation payload",
@@ -260,7 +265,7 @@ public class AdminController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     public ResponseEntity<ApiResponse<QuestionResponse>> updateQuestion(
-            @PathVariable Long id,
+            @PathVariable @Positive Long id,
             @Valid @RequestBody QuestionRequest request
     ) {
         QuestionResponse response = adminQuizService.updateQuestion(id, request);
@@ -273,7 +278,7 @@ public class AdminController {
             description = "Deletes a question from its quiz.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<ApiResponse<Void>> deleteQuestion(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteQuestion(@PathVariable @Positive Long id) {
         adminQuizService.deleteQuestion(id);
         return ResponseEntity.ok(ApiResponse.success("Question deleted successfully"));
     }

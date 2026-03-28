@@ -9,15 +9,11 @@ import com.quizze.quizze.quiz.domain.Option;
 import com.quizze.quizze.quiz.domain.Question;
 import com.quizze.quizze.quiz.domain.Quiz;
 import com.quizze.quizze.quiz.domain.QuizAttempt;
-import com.quizze.quizze.quiz.dto.user.AttemptAnswerResultResponse;
 import com.quizze.quizze.quiz.dto.user.AttemptHistoryResponse;
-import com.quizze.quizze.quiz.dto.user.AttemptOptionResponse;
-import com.quizze.quizze.quiz.dto.user.AttemptQuestionResponse;
 import com.quizze.quizze.quiz.dto.user.AttemptQuestionsResponse;
 import com.quizze.quizze.quiz.dto.user.QuizCatalogResponse;
 import com.quizze.quizze.quiz.dto.user.QuizDetailResponse;
 import com.quizze.quizze.quiz.dto.user.QuizResultResponse;
-import com.quizze.quizze.quiz.dto.user.QuizSummaryResponse;
 import com.quizze.quizze.quiz.dto.user.StartQuizResponse;
 import com.quizze.quizze.quiz.dto.user.SubmitAnswerRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizRequest;
@@ -25,6 +21,7 @@ import com.quizze.quizze.quiz.dto.user.SubmitQuizResponse;
 import com.quizze.quizze.quiz.dto.user.UserCategoryPerformanceResponse;
 import com.quizze.quizze.quiz.dto.user.UserPerformanceAnalyticsResponse;
 import com.quizze.quizze.quiz.dto.user.UserPerformanceTrendItemResponse;
+import com.quizze.quizze.quiz.mapper.UserQuizMapper;
 import com.quizze.quizze.quiz.repository.QuizAttemptRepository;
 import com.quizze.quizze.quiz.repository.QuizRepository;
 import com.quizze.quizze.user.domain.User;
@@ -59,6 +56,7 @@ public class UserQuizService {
     private final QuizRepository quizRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final UserRepository userRepository;
+    private final UserQuizMapper userQuizMapper;
 
     @Transactional(readOnly = true)
     public QuizCatalogResponse getPublishedQuizzes(
@@ -83,28 +81,23 @@ public class UserQuizService {
 
         Page<Quiz> quizPage = quizRepository.findAll(specification, pageable);
 
-        return QuizCatalogResponse.builder()
-                .content(quizPage.getContent().stream().map(this::mapQuizSummary).toList())
-                .availableCategories(quizRepository.findPublishedCategoryNames())
-                .pageNumber(quizPage.getNumber())
-                .pageSize(quizPage.getSize())
-                .totalPages(quizPage.getTotalPages())
-                .totalElements(quizPage.getTotalElements())
-                .hasNext(quizPage.hasNext())
-                .hasPrevious(quizPage.hasPrevious())
-                .build();
+        return userQuizMapper.toQuizCatalogResponse(quizPage, quizRepository.findPublishedCategoryNames());
     }
 
     @Transactional(readOnly = true)
     public QuizDetailResponse getPublishedQuizDetails(Long quizId) {
         Quiz quiz = getPublishedQuiz(quizId);
-        return mapQuizDetail(quiz);
+        return userQuizMapper.toQuizDetailResponse(quiz);
     }
 
     @Transactional
     public StartQuizResponse startQuiz(Long quizId, Long userId) {
         Quiz quiz = getPublishedQuiz(quizId);
         User user = getUser(userId);
+
+        if (quiz.getQuestions().isEmpty()) {
+            throw new BadRequestException("This quiz is not ready yet because it has no questions");
+        }
 
         if (quiz.isOneAttemptOnly() && !quizAttemptRepository.findByUserIdAndQuizId(userId, quizId).isEmpty()) {
             throw new BadRequestException("This quiz can only be attempted once");
@@ -120,16 +113,7 @@ public class UserQuizService {
         QuizAttempt savedAttempt = quizAttemptRepository.save(attempt);
         LocalDateTime expiresAt = calculateExpiresAt(savedAttempt);
 
-        return StartQuizResponse.builder()
-                .attemptId(savedAttempt.getId())
-                .quizId(quiz.getId())
-                .quizTitle(quiz.getTitle())
-                .status(savedAttempt.getStatus())
-                .startedAt(savedAttempt.getStartedAt())
-                .expiresAt(expiresAt)
-                .timeLimitInMinutes(quiz.getTimeLimitInMinutes())
-                .questionCount(quiz.getQuestions().size())
-                .build();
+        return userQuizMapper.toStartQuizResponse(savedAttempt, expiresAt);
     }
 
     @Transactional(readOnly = true)
@@ -143,31 +127,12 @@ public class UserQuizService {
         LocalDateTime expiresAt = calculateExpiresAt(attempt);
         boolean timeExpired = isTimedOut(attempt);
 
-        List<AttemptQuestionResponse> questions = getOrderedQuestions(attempt).stream()
-                .map(question -> AttemptQuestionResponse.builder()
-                        .id(question.getId())
-                        .content(question.getContent())
-                        .points(question.getPoints())
-                        .options(question.getOptions().stream()
-                                .sorted(Comparator.comparing(Option::getId))
-                                .map(option -> AttemptOptionResponse.builder()
-                                        .id(option.getId())
-                                        .content(option.getContent())
-                                        .build())
-                                .toList())
-                        .build())
-                .toList();
-
-        return AttemptQuestionsResponse.builder()
-                .attemptId(attempt.getId())
-                .quizId(attempt.getQuiz().getId())
-                .quizTitle(attempt.getQuiz().getTitle())
-                .startedAt(attempt.getStartedAt())
-                .expiresAt(expiresAt)
-                .timeLimitInMinutes(attempt.getQuiz().getTimeLimitInMinutes())
-                .timeExpired(timeExpired)
-                .questions(questions)
-                .build();
+        return userQuizMapper.toAttemptQuestionsResponse(
+                attempt,
+                expiresAt,
+                timeExpired,
+                getOrderedQuestions(attempt)
+        );
     }
 
     @Transactional
@@ -231,24 +196,19 @@ public class UserQuizService {
         attempt.setStatus(AttemptStatus.SUBMITTED);
         attempt.setSubmittedAt(LocalDateTime.now());
 
-        return SubmitQuizResponse.builder()
-                .attemptId(attempt.getId())
-                .status(attempt.getStatus())
-                .submittedAt(attempt.getSubmittedAt())
-                .score(attempt.getScore())
-                .maxScore(maxScore)
-                .percentage(calculatePercentage(attempt.getScore(), maxScore))
-                .correctAnswers(attempt.getCorrectAnswers())
-                .wrongAnswers(attempt.getWrongAnswers())
-                .timeExpired(timeExpired)
-                .build();
+        return userQuizMapper.toSubmitQuizResponse(
+                attempt,
+                maxScore,
+                calculatePercentage(attempt.getScore(), maxScore),
+                timeExpired
+        );
     }
 
     @Transactional(readOnly = true)
     public List<AttemptHistoryResponse> getAttemptHistory(Long userId) {
         return quizAttemptRepository.findByUserId(userId).stream()
                 .sorted(Comparator.comparing(QuizAttempt::getCreatedAt).reversed())
-                .map(this::mapAttemptHistory)
+                .map(this::toAttemptHistoryResponse)
                 .toList();
     }
 
@@ -257,7 +217,7 @@ public class UserQuizService {
         return quizAttemptRepository.findByUserId(userId).stream()
                 .filter(attempt -> attempt.getStatus() == AttemptStatus.SUBMITTED)
                 .sorted(Comparator.comparing(QuizAttempt::getSubmittedAt).reversed())
-                .map(this::mapQuizResult)
+                .map(this::toQuizResultResponse)
                 .toList();
     }
 
@@ -267,7 +227,7 @@ public class UserQuizService {
         if (attempt.getStatus() != AttemptStatus.SUBMITTED) {
             throw new BadRequestException("Result is available only after the quiz is submitted");
         }
-        return mapQuizResult(attempt);
+        return toQuizResultResponse(attempt);
     }
 
     @Transactional(readOnly = true)
@@ -300,36 +260,32 @@ public class UserQuizService {
                 ));
 
         List<UserCategoryPerformanceResponse> categoryPerformances = attemptsByCategory.entrySet().stream()
-                .map(entry -> mapCategoryPerformance(entry.getKey(), entry.getValue()))
+                .map(entry -> toCategoryPerformanceResponse(entry.getKey(), entry.getValue()))
                 .sorted(Comparator.comparing(UserCategoryPerformanceResponse::getAveragePercentage, Comparator.reverseOrder()))
                 .toList();
 
         List<UserPerformanceTrendItemResponse> recentTrend = submittedAttempts.stream()
                 .limit(5)
-                .map(attempt -> UserPerformanceTrendItemResponse.builder()
-                        .attemptId(attempt.getId())
-                        .quizTitle(attempt.getQuiz().getTitle())
-                        .categoryName(attempt.getQuiz().getCategory() == null ? "Uncategorized" : attempt.getQuiz().getCategory().getName())
-                        .score(attempt.getScore())
-                        .maxScore(calculateMaxScore(attempt.getQuiz()))
-                        .percentage(calculateAttemptPercentage(attempt))
-                        .submittedAt(attempt.getSubmittedAt())
-                        .build())
+                .map(this::toTrendItemResponse)
                 .toList();
 
-        return UserPerformanceAnalyticsResponse.builder()
-                .totalSubmittedAttempts(submittedAttempts.size())
-                .totalDistinctQuizzes(submittedAttempts.stream().map(attempt -> attempt.getQuiz().getId()).distinct().count())
-                .averageScore(averageScore)
-                .averagePercentage(averagePercentage)
-                .bestPercentage(bestPercentage)
-                .strongestCategory(categoryPerformances.isEmpty() ? null : categoryPerformances.get(0))
-                .weakestCategory(categoryPerformances.isEmpty() ? null : categoryPerformances.get(categoryPerformances.size() - 1))
-                .recentTrend(recentTrend)
-                .build();
+        return userQuizMapper.toUserPerformanceAnalyticsResponse(
+                submittedAttempts.size(),
+                submittedAttempts.stream().map(attempt -> attempt.getQuiz().getId()).distinct().count(),
+                averageScore,
+                averagePercentage,
+                bestPercentage,
+                categoryPerformances.isEmpty() ? null : categoryPerformances.get(0),
+                categoryPerformances.isEmpty() ? null : categoryPerformances.get(categoryPerformances.size() - 1),
+                recentTrend
+        );
     }
 
     private void validateSubmittedAnswers(QuizAttempt attempt, SubmitQuizRequest request) {
+        if (request.getAnswers().size() > attempt.getQuiz().getQuestions().size()) {
+            throw new BadRequestException("Submitted answers exceed the number of quiz questions");
+        }
+
         Set<Long> allowedQuestionIds = attempt.getQuiz().getQuestions().stream()
                 .map(Question::getId)
                 .collect(java.util.stream.Collectors.toSet());
@@ -361,82 +317,22 @@ public class UserQuizService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
     }
 
-    private QuizSummaryResponse mapQuizSummary(Quiz quiz) {
-        return QuizSummaryResponse.builder()
-                .id(quiz.getId())
-                .title(quiz.getTitle())
-                .description(quiz.getDescription())
-                .categoryName(quiz.getCategory() == null ? null : quiz.getCategory().getName())
-                .difficulty(quiz.getDifficulty())
-                .timeLimitInMinutes(quiz.getTimeLimitInMinutes())
-                .questionCount(quiz.getQuestions().size())
-                .oneAttemptOnly(quiz.isOneAttemptOnly())
-                .negativeMarkingEnabled(quiz.isNegativeMarkingEnabled())
-                .build();
-    }
-
-    private AttemptHistoryResponse mapAttemptHistory(QuizAttempt attempt) {
+    private AttemptHistoryResponse toAttemptHistoryResponse(QuizAttempt attempt) {
         double maxScore = calculateMaxScore(attempt.getQuiz());
-        return AttemptHistoryResponse.builder()
-                .attemptId(attempt.getId())
-                .quizId(attempt.getQuiz().getId())
-                .quizTitle(attempt.getQuiz().getTitle())
-                .status(attempt.getStatus())
-                .startedAt(attempt.getStartedAt())
-                .submittedAt(attempt.getSubmittedAt())
-                .score(attempt.getScore())
-                .maxScore(maxScore)
-                .percentage(calculatePercentage(attempt.getScore(), maxScore))
-                .correctAnswers(attempt.getCorrectAnswers())
-                .wrongAnswers(attempt.getWrongAnswers())
-                .build();
+        return userQuizMapper.toAttemptHistoryResponse(
+                attempt,
+                maxScore,
+                calculatePercentage(attempt.getScore(), maxScore)
+        );
     }
 
-    private QuizDetailResponse mapQuizDetail(Quiz quiz) {
-        return QuizDetailResponse.builder()
-                .id(quiz.getId())
-                .title(quiz.getTitle())
-                .description(quiz.getDescription())
-                .categoryName(quiz.getCategory() == null ? null : quiz.getCategory().getName())
-                .difficulty(quiz.getDifficulty())
-                .timeLimitInMinutes(quiz.getTimeLimitInMinutes())
-                .oneAttemptOnly(quiz.isOneAttemptOnly())
-                .negativeMarkingEnabled(quiz.isNegativeMarkingEnabled())
-                .questionCount(quiz.getQuestions().size())
-                .build();
-    }
-
-    private QuizResultResponse mapQuizResult(QuizAttempt attempt) {
+    private QuizResultResponse toQuizResultResponse(QuizAttempt attempt) {
         double maxScore = calculateMaxScore(attempt.getQuiz());
-
-        List<AttemptAnswerResultResponse> answers = attempt.getAnswers().stream()
-                .sorted(Comparator.comparing(answer -> answer.getQuestion().getId()))
-                .map(answer -> AttemptAnswerResultResponse.builder()
-                        .questionId(answer.getQuestion().getId())
-                        .questionContent(answer.getQuestion().getContent())
-                        .selectedOptionId(answer.getSelectedOption() == null ? null : answer.getSelectedOption().getId())
-                        .selectedOptionContent(answer.getSelectedOption() == null ? null : answer.getSelectedOption().getContent())
-                        .correct(Boolean.TRUE.equals(answer.getCorrect()))
-                        .points(answer.getQuestion().getPoints())
-                        .build())
-                .toList();
-
-        return QuizResultResponse.builder()
-                .attemptId(attempt.getId())
-                .quizId(attempt.getQuiz().getId())
-                .quizTitle(attempt.getQuiz().getTitle())
-                .status(attempt.getStatus())
-                .startedAt(attempt.getStartedAt())
-                .submittedAt(attempt.getSubmittedAt())
-                .totalQuestions(attempt.getQuiz().getQuestions().size())
-                .attemptedQuestions(attempt.getAnswers().size())
-                .correctAnswers(attempt.getCorrectAnswers())
-                .wrongAnswers(attempt.getWrongAnswers())
-                .score(attempt.getScore())
-                .maxScore(maxScore)
-                .percentage(calculatePercentage(attempt.getScore(), maxScore))
-                .answers(answers)
-                .build();
+        return userQuizMapper.toQuizResultResponse(
+                attempt,
+                maxScore,
+                calculatePercentage(attempt.getScore(), maxScore)
+        );
     }
 
     private String buildRandomQuestionOrder(Quiz quiz) {
@@ -510,13 +406,26 @@ public class UserQuizService {
         return calculatePercentage(attempt.getScore(), calculateMaxScore(attempt.getQuiz()));
     }
 
-    private UserCategoryPerformanceResponse mapCategoryPerformance(String categoryName, List<QuizAttempt> attempts) {
-        return UserCategoryPerformanceResponse.builder()
-                .categoryName(categoryName)
-                .attempts(attempts.size())
-                .averageScore(attempts.stream().mapToDouble(QuizAttempt::getScore).average().orElse(0.0))
-                .averagePercentage(attempts.stream().mapToDouble(this::calculateAttemptPercentage).average().orElse(0.0))
-                .build();
+    private UserCategoryPerformanceResponse toCategoryPerformanceResponse(String categoryName, List<QuizAttempt> attempts) {
+        return userQuizMapper.toUserCategoryPerformanceResponse(
+                categoryName,
+                attempts.size(),
+                attempts.stream().mapToDouble(QuizAttempt::getScore).average().orElse(0.0),
+                attempts.stream().mapToDouble(this::calculateAttemptPercentage).average().orElse(0.0)
+        );
+    }
+
+    private UserPerformanceTrendItemResponse toTrendItemResponse(QuizAttempt attempt) {
+        String categoryName = attempt.getQuiz().getCategory() == null
+                ? "Uncategorized"
+                : attempt.getQuiz().getCategory().getName();
+
+        return userQuizMapper.toUserPerformanceTrendItemResponse(
+                attempt,
+                categoryName,
+                calculateMaxScore(attempt.getQuiz()),
+                calculateAttemptPercentage(attempt)
+        );
     }
 
     private Sort.Direction resolveSortDirection(String sortDir) {

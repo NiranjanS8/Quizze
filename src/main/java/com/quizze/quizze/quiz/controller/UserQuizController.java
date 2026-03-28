@@ -21,10 +21,15 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/quizzes")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "User Quiz Flow", description = "User-facing endpoints for browsing quizzes and managing quiz attempts")
 public class UserQuizController {
 
@@ -52,8 +58,8 @@ public class UserQuizController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) DifficultyLevel difficulty,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "6") int size,
+            @RequestParam(defaultValue = "0") @PositiveOrZero int page,
+            @RequestParam(defaultValue = "6") @Min(1) @Max(50) int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
@@ -69,7 +75,7 @@ public class UserQuizController {
             description = "Returns published quiz metadata without exposing answer keys.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<ApiResponse<QuizDetailResponse>> getPublishedQuizDetails(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<QuizDetailResponse>> getPublishedQuizDetails(@PathVariable @Positive Long id) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Quiz details fetched successfully",
                 userQuizService.getPublishedQuizDetails(id)
@@ -83,8 +89,8 @@ public class UserQuizController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     public ResponseEntity<ApiResponse<QuizLeaderboardResponse>> getPublishedQuizLeaderboard(
-            @PathVariable Long id,
-            @RequestParam(defaultValue = "10") int limit
+            @PathVariable @Positive Long id,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int limit
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Quiz leaderboard fetched successfully",
@@ -99,7 +105,7 @@ public class UserQuizController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     public ResponseEntity<ApiResponse<StartQuizResponse>> startQuiz(
-            @PathVariable Long id,
+            @PathVariable @Positive Long id,
             @AuthenticationPrincipal CustomUserDetails currentUser
     ) {
         StartQuizResponse response = userQuizService.startQuiz(id, currentUser.getUser().getId());
@@ -114,7 +120,7 @@ public class UserQuizController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     public ResponseEntity<ApiResponse<AttemptQuestionsResponse>> getAttemptQuestions(
-            @PathVariable Long attemptId,
+            @PathVariable @Positive Long attemptId,
             @AuthenticationPrincipal CustomUserDetails currentUser
     ) {
         return ResponseEntity.ok(ApiResponse.success(
@@ -136,7 +142,7 @@ public class UserQuizController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Attempt not found", content = @Content)
     })
     public ResponseEntity<ApiResponse<SubmitQuizResponse>> submitQuiz(
-            @PathVariable Long attemptId,
+            @PathVariable @Positive Long attemptId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
                     description = "Answer submission payload",
@@ -175,7 +181,7 @@ public class UserQuizController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Attempt not found", content = @Content)
     })
     public ResponseEntity<ApiResponse<QuizResultResponse>> getAttemptResult(
-            @PathVariable Long attemptId,
+            @PathVariable @Positive Long attemptId,
             @AuthenticationPrincipal CustomUserDetails currentUser
     ) {
         return ResponseEntity.ok(ApiResponse.success(

@@ -3,6 +3,7 @@ package com.quizze.quizze.auth.service;
 import com.quizze.quizze.auth.dto.AuthResponse;
 import com.quizze.quizze.auth.dto.LoginRequest;
 import com.quizze.quizze.auth.dto.RegisterRequest;
+import com.quizze.quizze.auth.mapper.AuthMapper;
 import com.quizze.quizze.security.jwt.JwtService;
 import com.quizze.quizze.security.user.CustomUserDetails;
 import com.quizze.quizze.user.domain.Role;
@@ -29,6 +30,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final AuthMapper authMapper;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -57,7 +59,7 @@ public class AuthService {
         User savedUser = userRepository.save(user);
         String token = jwtService.generateToken(savedUser.getId(), savedUser.getUsername(), savedUser.getRole().getName().name());
 
-        return buildAuthResponse(savedUser, token);
+        return authMapper.toAuthResponse(savedUser, token);
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -69,17 +71,6 @@ public class AuthService {
         User user = principal.getUser();
         String token = jwtService.generateToken(user.getId(), user.getUsername(), user.getRole().getName().name());
 
-        return buildAuthResponse(user, token);
-    }
-
-    private AuthResponse buildAuthResponse(User user, String token) {
-        return AuthResponse.builder()
-                .accessToken(token)
-                .tokenType("Bearer")
-                .userId(user.getId())
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .role(user.getRole().getName().name())
-                .build();
+        return authMapper.toAuthResponse(user, token);
     }
 }
