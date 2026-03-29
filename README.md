@@ -21,7 +21,7 @@ Quizze is a full-stack online quiz platform built with Spring Boot, PostgreSQL, 
 
 ### Backend
 
-- Java 17
+- Java 21
 - Spring Boot 3
 - Spring Security
 - Spring Data JPA
@@ -135,71 +135,8 @@ Quizze/
 |- .env.example
 ```
 
-## Local Setup
 
-### 1. Clone and configure environment
-
-Copy the example file and fill in real values where needed:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Important values to set:
-
-- `JWT_SECRET`
-- `DB_URL`
-- `DB_USERNAME`
-- `DB_PASSWORD`
-- `MAIL_USERNAME`
-- `MAIL_PASSWORD`
-
-### 2. Start infrastructure
-
-This starts Kafka, Redis, Prometheus, and Grafana:
-
-```powershell
-docker compose -f C:\Users\Niranjan\Desktop\Quizze\docker-compose.kafka.yml up -d
-```
-
-### 3. Run the backend
-
-```powershell
-mvn spring-boot:run
-```
-
-Backend runs on:
-
-- `http://localhost:9090`
-
-### 4. Run the frontend
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend runs on:
-
-- `http://localhost:5173`
-
-## Useful URLs
-
-- Frontend: [http://localhost:5173](http://localhost:5173)
-- Backend API: [http://localhost:9090](http://localhost:9090)
-- Swagger UI: [http://localhost:9090/swagger-ui.html](http://localhost:9090/swagger-ui.html)
-- OpenAPI JSON: [http://localhost:9090/v3/api-docs](http://localhost:9090/v3/api-docs)
-- Actuator Health: [http://localhost:9090/actuator/health](http://localhost:9090/actuator/health)
-- Prometheus: [http://localhost:9091](http://localhost:9091)
-- Grafana: [http://localhost:3000](http://localhost:3000)
-
-Grafana default login:
-
-- Username: `admin`
-- Password: `admin`
-
-## API Endpoint Summary
+## API Endpoint 
 
 ### Public Auth Endpoints
 
@@ -306,27 +243,9 @@ Provisioned Grafana dashboards:
 
 ## Testing
 
-Run the full backend test suite:
-
-```powershell
-mvn test
-```
-
 Current test coverage includes:
 
 - service unit tests
 - authentication API integration tests
 - user quiz flow integration tests
 
-## Sample Resume Description
-
-Built a full-stack quiz platform using Spring Boot, PostgreSQL, React, Vite, Redis, and Kafka, featuring JWT authentication, role-based access control, quiz analytics, leaderboards, audit logging, OTP-based password reset, asynchronous email notifications, Prometheus metrics, Grafana dashboards, and tested REST APIs.
-
-## Future Improvements
-
-- deployment with public demo URLs
-- admin API integration tests
-- alerting for notification failures
-- richer Grafana dashboards
-- CI/CD pipeline
-- screenshot gallery in the README
