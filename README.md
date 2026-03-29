@@ -94,23 +94,7 @@ Quizze is a full-stack online quiz platform built with Spring Boot, PostgreSQL, 
 
 The project follows a modular monolith backend structure with clear separation between controller, service, mapper, repository, domain, and configuration layers.
 
-```text
-frontend (React + Vite)
-        |
-        v
-Spring Boot REST API
-  |- Auth / Security
-  |- Quiz Management
-  |- Quiz Attempts & Results
-  |- Analytics / Leaderboards
-  |- Notifications / Audit Logs
-        |
-        +--> PostgreSQL
-        +--> Redis
-        +--> Kafka
-        +--> SMTP
-        +--> Prometheus / Grafana
-```
+![Architecture](Quizze_Architecture.png)
 
 ## Project Structure
 
