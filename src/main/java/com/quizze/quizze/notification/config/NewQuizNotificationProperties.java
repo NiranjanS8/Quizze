@@ -14,4 +14,6 @@ public class NewQuizNotificationProperties {
     private String consumerGroupId = "quizze-new-quiz-mailer";
     private int batchSize = 100;
     private int maxRetryAttempts = 2;
+    private int consumerDeliveryAttempts = 3;
+    private long consumerRetryDelayMs = 5000;
 }

@@ -4,6 +4,7 @@ import com.quizze.quizze.notification.config.QuizResultNotificationProperties;
 import com.quizze.quizze.notification.kafka.QuizSubmittedMessage;
 import com.quizze.quizze.monitoring.service.ApplicationMetricsService;
 import com.quizze.quizze.quiz.event.QuizSubmittedEvent;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,7 +24,12 @@ public class QuizSubmittedKafkaProducer {
 
     @EventListener
     public void handleQuizSubmitted(QuizSubmittedEvent event) {
-        QuizSubmittedMessage message = new QuizSubmittedMessage(event.attemptId(), event.quizId(), event.userId());
+        QuizSubmittedMessage message = new QuizSubmittedMessage(
+                UUID.randomUUID().toString(),
+                event.attemptId(),
+                event.quizId(),
+                event.userId()
+        );
         kafkaTemplate.send(properties.getTopic(), String.valueOf(event.attemptId()), message)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {

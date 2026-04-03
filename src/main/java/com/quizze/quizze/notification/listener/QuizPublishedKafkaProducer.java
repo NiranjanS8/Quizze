@@ -4,6 +4,7 @@ import com.quizze.quizze.notification.config.NewQuizNotificationProperties;
 import com.quizze.quizze.notification.event.QuizPublishedEvent;
 import com.quizze.quizze.notification.kafka.NewQuizPublishedMessage;
 import com.quizze.quizze.monitoring.service.ApplicationMetricsService;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -24,6 +25,7 @@ public class QuizPublishedKafkaProducer {
     @EventListener
     public void handleQuizPublished(QuizPublishedEvent event) {
         NewQuizPublishedMessage message = new NewQuizPublishedMessage(
+                UUID.randomUUID().toString(),
                 event.quizId(),
                 event.quizTitle(),
                 event.quizDescription(),

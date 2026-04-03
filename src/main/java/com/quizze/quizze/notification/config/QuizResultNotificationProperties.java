@@ -13,4 +13,6 @@ public class QuizResultNotificationProperties {
     private String topic = "quizze.quiz-submitted";
     private String consumerGroupId = "quizze-quiz-result-mailer";
     private int maxRetryAttempts = 2;
+    private int consumerDeliveryAttempts = 3;
+    private long consumerRetryDelayMs = 5000;
 }
