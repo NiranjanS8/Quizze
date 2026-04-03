@@ -1,0 +1,23 @@
+server:
+  port: ${SERVER_PORT:9090}
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/Quizze}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:admin@123}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+logging:
+  level:
+    root: info
+    com.quizze.quizze: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
