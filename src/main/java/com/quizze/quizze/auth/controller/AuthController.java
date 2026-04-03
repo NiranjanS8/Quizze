@@ -5,6 +5,7 @@ import com.quizze.quizze.auth.dto.ForgotPasswordRequest;
 import com.quizze.quizze.auth.dto.LoginRequest;
 import com.quizze.quizze.auth.dto.RegisterRequest;
 import com.quizze.quizze.auth.dto.ResetPasswordRequest;
+import com.quizze.quizze.auth.service.AuthRateLimitService;
 import com.quizze.quizze.auth.service.AuthService;
 import com.quizze.quizze.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,7 +14,9 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final AuthRateLimitService authRateLimitService;
 
     @PostMapping("/register")
     @Operation(
@@ -94,8 +98,10 @@ public class AuthController {
                             )
                     )
             )
-            @Valid @RequestBody LoginRequest request
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpServletRequest
     ) {
+        authRateLimitService.checkLoginLimit(resolveClientIp(httpServletRequest), request.getUsernameOrEmail());
         AuthResponse response = authService.login(request);
         return ResponseEntity.ok(com.quizze.quizze.common.api.ApiResponse.success("Login successful", response));
     }
@@ -125,8 +131,10 @@ public class AuthController {
                             )
                     )
             )
-            @Valid @RequestBody ForgotPasswordRequest request
+            @Valid @RequestBody ForgotPasswordRequest request,
+            HttpServletRequest httpServletRequest
     ) {
+        authRateLimitService.checkForgotPasswordLimit(resolveClientIp(httpServletRequest), request.getEmail());
         String message = authService.forgotPassword(request);
         return ResponseEntity.ok(ApiResponse.success(message));
     }
@@ -158,9 +166,19 @@ public class AuthController {
                             )
                     )
             )
-            @Valid @RequestBody ResetPasswordRequest request
+            @Valid @RequestBody ResetPasswordRequest request,
+            HttpServletRequest httpServletRequest
     ) {
+        authRateLimitService.checkResetPasswordLimit(resolveClientIp(httpServletRequest), request.getEmail());
         String message = authService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.success(message));
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim().toLowerCase(Locale.ROOT);
+        }
+        return request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr().trim().toLowerCase(Locale.ROOT);
     }
 }
