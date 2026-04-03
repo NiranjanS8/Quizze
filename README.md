@@ -190,6 +190,27 @@ Important groups:
 - New quiz notification settings
 - Quiz result notification settings
 
+## Docker Backend
+
+To run the backend with containerized PostgreSQL, Redis, and Kafka:
+
+```powershell
+docker compose -f docker-compose.backend.yml up --build
+```
+
+This starts:
+
+- backend on `http://localhost:9090`
+- PostgreSQL on `localhost:5432`
+- Redis on `localhost:6379`
+- Kafka on `localhost:9092`
+
+Notes:
+
+- the backend container uses the `dev` Spring profile by default
+- `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` are wired to the internal PostgreSQL service automatically
+- Redis and Kafka are available in the stack, but the app only uses them when the related feature flags in `.env` are enabled
+
 ## Messaging and Notification Flow
 
 ### New quiz notifications

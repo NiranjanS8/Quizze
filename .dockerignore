@@ -1,0 +1,12 @@
+.git
+.gitignore
+.idea
+frontend
+monitoring
+target
+database
+*.md
+*.png
+.env
+.env.example
+docker-compose*.yml
