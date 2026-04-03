@@ -79,6 +79,17 @@ function formatRemainingTime(targetTime) {
   return `${minutes}:${seconds}`;
 }
 
+function formatDateTime(value) {
+  if (!value) {
+    return "";
+  }
+
+  return new Date(value).toLocaleString([], {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
 function Button({ children, className = "", ...props }) {
   return (
     <button className={`btn ${className}`.trim()} {...props}>
@@ -278,14 +289,77 @@ export default function App() {
 function ProtectedLayout({ auth, message, setMessage, error, setError }) {
   const navigate = useNavigate();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   useEffect(() => {
-    document.body.classList.toggle("modal-open", showLogoutConfirm);
+    document.body.classList.toggle("modal-open", showLogoutConfirm || showNotifications);
 
     return () => {
       document.body.classList.remove("modal-open");
     };
-  }, [showLogoutConfirm]);
+  }, [showLogoutConfirm, showNotifications]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadUnreadCount() {
+      if (!auth.token || auth.user?.role === "ADMIN") {
+        if (active) {
+          setUnreadCount(0);
+        }
+        return;
+      }
+
+      try {
+        const count = await apiRequest("/api/users/me/notifications/unread-count", {}, auth.token);
+        if (active) {
+          setUnreadCount(count || 0);
+        }
+      } catch {
+        if (active) {
+          setUnreadCount(0);
+        }
+      }
+    }
+
+    loadUnreadCount();
+    return () => {
+      active = false;
+    };
+  }, [auth.token, auth.user?.role]);
+
+  useEffect(() => {
+    if (!showNotifications || !auth.token || auth.user?.role === "ADMIN") {
+      return;
+    }
+
+    let active = true;
+    setNotificationsLoading(true);
+
+    apiRequest("/api/users/me/notifications", {}, auth.token)
+      .then((data) => {
+        if (active) {
+          setNotifications(data || []);
+        }
+      })
+      .catch((loadError) => {
+        if (active) {
+          setError(loadError.message);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setNotificationsLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [showNotifications, auth.token, auth.user?.role, setError]);
 
   if (!auth.isAuthenticated) {
     return <Navigate to="/auth" replace />;
@@ -305,6 +379,35 @@ function ProtectedLayout({ auth, message, setMessage, error, setError }) {
           { to: "/results", icon: "analytics", label: "Results" },
         ]),
   ];
+
+  async function openNotifications() {
+    setShowNotifications(true);
+  }
+
+  async function markNotificationAsRead(notificationId) {
+    try {
+      const updated = await apiRequest(`/api/users/me/notifications/${notificationId}/read`, { method: "PATCH", body: JSON.stringify({}) }, auth.token);
+      setNotifications((current) =>
+        current.map((notification) =>
+          notification.id === notificationId ? { ...notification, ...updated, read: true } : notification,
+        ),
+      );
+      setUnreadCount((current) => Math.max(0, current - 1));
+    } catch (markError) {
+      setError(markError.message);
+    }
+  }
+
+  async function markAllNotificationsAsRead() {
+    try {
+      await apiRequest("/api/users/me/notifications/read-all", { method: "PATCH", body: JSON.stringify({}) }, auth.token);
+      setNotifications((current) => current.map((notification) => ({ ...notification, read: true })));
+      setUnreadCount(0);
+      setMessage("All notifications marked as read.");
+    } catch (markError) {
+      setError(markError.message);
+    }
+  }
 
   return (
     <div className="layout">
@@ -326,6 +429,13 @@ function ProtectedLayout({ auth, message, setMessage, error, setError }) {
         </nav>
 
         <div className="sidebar-profile">
+          {auth.user?.role !== "ADMIN" ? (
+            <button className="notification-trigger" onClick={openNotifications} type="button">
+              <span className="material-symbols-outlined">notifications</span>
+              <span>Notifications</span>
+              {unreadCount > 0 ? <span className="notification-badge">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
+            </button>
+          ) : null}
           <div>
             <div className="profile-name">{auth.user?.username}</div>
           </div>
@@ -371,6 +481,58 @@ function ProtectedLayout({ auth, message, setMessage, error, setError }) {
               </Button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {showNotifications ? (
+        <div className="modal-backdrop is-visible notification-backdrop" onClick={() => setShowNotifications(false)} role="presentation">
+          <aside
+            className="notification-drawer"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="notification-title"
+          >
+            <div className="panel-title-row">
+              <div>
+                <h3 className="panel-title" id="notification-title">Notifications</h3>
+                <div className="muted tiny">{unreadCount} unread</div>
+              </div>
+              <Button className="ghost-btn" onClick={() => setShowNotifications(false)} type="button">
+                Close
+              </Button>
+            </div>
+
+            <div className="helper-row notification-actions">
+              <button className="text-btn" onClick={markAllNotificationsAsRead} type="button">
+                Mark all as read
+              </button>
+            </div>
+
+            <div className="notification-list">
+              {notificationsLoading ? <div className="empty-state">Loading notifications...</div> : null}
+              {!notificationsLoading && !notifications.length ? <div className="empty-state">No notifications yet.</div> : null}
+              {!notificationsLoading
+                ? notifications.map((notification) => (
+                    <div className={`notification-item${notification.read ? "" : " unread"}`} key={notification.id}>
+                      <div className="helper-row">
+                        <div className="list-title">{notification.title}</div>
+                        {!notification.read ? <span className="notification-dot" /> : null}
+                      </div>
+                      <div className="muted notification-copy">{notification.message}</div>
+                      <div className="helper-row notification-meta">
+                        <span className="muted tiny">{formatDateTime(notification.createdAt)}</span>
+                        {!notification.read ? (
+                          <button className="text-btn tiny" onClick={() => markNotificationAsRead(notification.id)} type="button">
+                            Mark as read
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                : null}
+            </div>
+          </aside>
         </div>
       ) : null}
     </div>

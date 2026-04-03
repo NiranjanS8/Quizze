@@ -4,6 +4,7 @@ import com.quizze.quizze.notification.domain.UserNotification;
 import com.quizze.quizze.notification.domain.UserNotificationType;
 import com.quizze.quizze.notification.dto.UserNotificationResponse;
 import com.quizze.quizze.notification.repository.UserNotificationRepository;
+import com.quizze.quizze.common.exception.ResourceNotFoundException;
 import com.quizze.quizze.user.domain.User;
 import com.quizze.quizze.user.repository.UserRepository;
 import java.util.List;
@@ -65,16 +66,40 @@ public class UserNotificationService {
     @Transactional(readOnly = true)
     public List<UserNotificationResponse> getNotifications(Long userId) {
         return userNotificationRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(notification -> UserNotificationResponse.builder()
-                        .id(notification.getId())
-                        .type(notification.getType())
-                        .title(notification.getTitle())
-                        .message(notification.getMessage())
-                        .read(notification.isRead())
-                        .relatedQuizId(notification.getRelatedQuizId())
-                        .relatedAttemptId(notification.getRelatedAttemptId())
-                        .createdAt(notification.getCreatedAt())
-                        .build())
+                .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public long getUnreadCount(Long userId) {
+        return userNotificationRepository.countByUserIdAndReadFalse(userId);
+    }
+
+    @Transactional
+    public UserNotificationResponse markAsRead(Long userId, Long notificationId) {
+        UserNotification notification = userNotificationRepository.findByIdAndUserId(notificationId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Notification not found with id: " + notificationId));
+        notification.setRead(true);
+        return toResponse(notification);
+    }
+
+    @Transactional
+    public long markAllAsRead(Long userId) {
+        List<UserNotification> unreadNotifications = userNotificationRepository.findByUserIdAndReadFalse(userId);
+        unreadNotifications.forEach(notification -> notification.setRead(true));
+        return unreadNotifications.size();
+    }
+
+    private UserNotificationResponse toResponse(UserNotification notification) {
+        return UserNotificationResponse.builder()
+                .id(notification.getId())
+                .type(notification.getType())
+                .title(notification.getTitle())
+                .message(notification.getMessage())
+                .read(notification.isRead())
+                .relatedQuizId(notification.getRelatedQuizId())
+                .relatedAttemptId(notification.getRelatedAttemptId())
+                .createdAt(notification.getCreatedAt())
+                .build();
     }
 }

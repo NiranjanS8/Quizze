@@ -16,7 +16,9 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
@@ -117,6 +119,52 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(
                 "User notifications fetched successfully",
                 userNotificationService.getNotifications(currentUser.getUser().getId())
+        ));
+    }
+
+    @GetMapping("/me/notifications/unread-count")
+    @Operation(
+            summary = "Get current user unread notification count",
+            description = "Returns the unread in-app notification count for the authenticated user.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<Long>> getUnreadNotificationCount(
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Unread notification count fetched successfully",
+                userNotificationService.getUnreadCount(currentUser.getUser().getId())
+        ));
+    }
+
+    @PatchMapping("/me/notifications/{notificationId}/read")
+    @Operation(
+            summary = "Mark one notification as read",
+            description = "Marks a single in-app notification as read for the authenticated user.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<UserNotificationResponse>> markNotificationAsRead(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long notificationId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Notification marked as read",
+                userNotificationService.markAsRead(currentUser.getUser().getId(), notificationId)
+        ));
+    }
+
+    @PatchMapping("/me/notifications/read-all")
+    @Operation(
+            summary = "Mark all notifications as read",
+            description = "Marks all in-app notifications as read for the authenticated user.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<Long>> markAllNotificationsAsRead(
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "All notifications marked as read",
+                userNotificationService.markAllAsRead(currentUser.getUser().getId())
         ));
     }
 }
