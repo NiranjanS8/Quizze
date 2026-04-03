@@ -1,7 +1,7 @@
 package com.quizze.quizze.quiz.service;
 
 import com.quizze.quizze.audit.domain.AuditActionType;
-import com.quizze.quizze.audit.service.AdminAuditLogService;
+import com.quizze.quizze.audit.event.AdminActionEvent;
 import com.quizze.quizze.cache.service.QuizCacheInvalidationService;
 import com.quizze.quizze.common.exception.BadRequestException;
 import com.quizze.quizze.common.exception.ResourceNotFoundException;
@@ -38,7 +38,6 @@ public class AdminQuizService {
     private final QuestionRepository questionRepository;
     private final CategoryRepository categoryRepository;
     private final AdminQuizMapper adminQuizMapper;
-    private final AdminAuditLogService adminAuditLogService;
     private final QuizCacheInvalidationService quizCacheInvalidationService;
     private final ApplicationEventPublisher applicationEventPublisher;
 
@@ -49,15 +48,8 @@ public class AdminQuizService {
         applyQuizDetails(quiz, request);
         Quiz savedQuiz = quizRepository.save(quiz);
         publishQuizIfNeeded(null, savedQuiz);
-        adminAuditLogService.recordAction(
-                adminUserId,
-                adminUsername,
-                AuditActionType.QUIZ_CREATED,
-                "QUIZ",
-                savedQuiz.getId(),
-                savedQuiz.getTitle(),
-                "Created quiz '" + savedQuiz.getTitle() + "'"
-        );
+        publishAdminAction(adminUserId, adminUsername, AuditActionType.QUIZ_CREATED, "QUIZ", savedQuiz.getId(), savedQuiz.getTitle(),
+                "Created quiz '" + savedQuiz.getTitle() + "'");
         quizCacheInvalidationService.evictAnalyticsForQuiz(savedQuiz.getId());
         log.info("Quiz created successfully with quizId={}", savedQuiz.getId());
         return adminQuizMapper.toQuizResponse(savedQuiz);
@@ -87,15 +79,8 @@ public class AdminQuizService {
         boolean wasPublished = quiz.isPublished();
         applyQuizDetails(quiz, request);
         publishQuizIfNeeded(wasPublished, quiz);
-        adminAuditLogService.recordAction(
-                adminUserId,
-                adminUsername,
-                AuditActionType.QUIZ_UPDATED,
-                "QUIZ",
-                quiz.getId(),
-                quiz.getTitle(),
-                "Updated quiz '" + previousTitle + "' to '" + quiz.getTitle() + "'"
-        );
+        publishAdminAction(adminUserId, adminUsername, AuditActionType.QUIZ_UPDATED, "QUIZ", quiz.getId(), quiz.getTitle(),
+                "Updated quiz '" + previousTitle + "' to '" + quiz.getTitle() + "'");
         quizCacheInvalidationService.evictAnalyticsForQuiz(quiz.getId());
         log.info("Quiz updated successfully for quizId={}", quizId);
         return adminQuizMapper.toQuizResponse(quiz);
@@ -106,15 +91,8 @@ public class AdminQuizService {
         log.info("Deleting quiz with quizId={}", quizId);
         Quiz quiz = getQuizEntity(quizId);
         String quizTitle = quiz.getTitle();
-        adminAuditLogService.recordAction(
-                adminUserId,
-                adminUsername,
-                AuditActionType.QUIZ_DELETED,
-                "QUIZ",
-                quiz.getId(),
-                quizTitle,
-                "Deleted quiz '" + quizTitle + "'"
-        );
+        publishAdminAction(adminUserId, adminUsername, AuditActionType.QUIZ_DELETED, "QUIZ", quiz.getId(), quizTitle,
+                "Deleted quiz '" + quizTitle + "'");
         quizRepository.delete(quiz);
         quizCacheInvalidationService.evictAnalyticsForQuiz(quizId);
         log.info("Quiz deleted successfully for quizId={}", quizId);
@@ -130,15 +108,8 @@ public class AdminQuizService {
         question.setQuiz(quiz);
         applyQuestionDetails(question, request);
         Question savedQuestion = questionRepository.save(question);
-        adminAuditLogService.recordAction(
-                adminUserId,
-                adminUsername,
-                AuditActionType.QUESTION_CREATED,
-                "QUESTION",
-                savedQuestion.getId(),
-                truncateForAudit(savedQuestion.getContent()),
-                "Added question to quiz '" + quiz.getTitle() + "'"
-        );
+        publishAdminAction(adminUserId, adminUsername, AuditActionType.QUESTION_CREATED, "QUESTION", savedQuestion.getId(),
+                truncateForAudit(savedQuestion.getContent()), "Added question to quiz '" + quiz.getTitle() + "'");
         quizCacheInvalidationService.evictAnalyticsForQuiz(quizId);
         log.info("Question added successfully with questionId={} to quizId={}", savedQuestion.getId(), quizId);
 
@@ -154,15 +125,8 @@ public class AdminQuizService {
         String previousContent = question.getContent();
         validateQuestionOptions(request);
         applyQuestionDetails(question, request);
-        adminAuditLogService.recordAction(
-                adminUserId,
-                adminUsername,
-                AuditActionType.QUESTION_UPDATED,
-                "QUESTION",
-                question.getId(),
-                truncateForAudit(question.getContent()),
-                "Updated question '" + truncateForAudit(previousContent) + "'"
-        );
+        publishAdminAction(adminUserId, adminUsername, AuditActionType.QUESTION_UPDATED, "QUESTION", question.getId(),
+                truncateForAudit(question.getContent()), "Updated question '" + truncateForAudit(previousContent) + "'");
         quizCacheInvalidationService.evictAnalyticsForQuiz(question.getQuiz().getId());
         log.info("Question updated successfully for questionId={}", questionId);
 
@@ -176,15 +140,8 @@ public class AdminQuizService {
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + questionId));
 
         String questionContent = question.getContent();
-        adminAuditLogService.recordAction(
-                adminUserId,
-                adminUsername,
-                AuditActionType.QUESTION_DELETED,
-                "QUESTION",
-                question.getId(),
-                truncateForAudit(questionContent),
-                "Deleted question from quiz '" + question.getQuiz().getTitle() + "'"
-        );
+        publishAdminAction(adminUserId, adminUsername, AuditActionType.QUESTION_DELETED, "QUESTION", question.getId(),
+                truncateForAudit(questionContent), "Deleted question from quiz '" + question.getQuiz().getTitle() + "'");
         Long quizId = question.getQuiz().getId();
         questionRepository.delete(question);
         quizCacheInvalidationService.evictAnalyticsForQuiz(quizId);
@@ -274,6 +231,26 @@ public class AdminQuizService {
                 quiz.getTitle(),
                 quiz.getDescription(),
                 quiz.getCategory() == null ? null : quiz.getCategory().getName()
+        ));
+    }
+
+    private void publishAdminAction(
+            Long adminUserId,
+            String adminUsername,
+            AuditActionType actionType,
+            String targetType,
+            Long targetId,
+            String targetName,
+            String description
+    ) {
+        applicationEventPublisher.publishEvent(new AdminActionEvent(
+                adminUserId,
+                adminUsername,
+                actionType,
+                targetType,
+                targetId,
+                targetName,
+                description
         ));
     }
 }

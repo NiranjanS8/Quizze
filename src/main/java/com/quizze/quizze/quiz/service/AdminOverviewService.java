@@ -4,9 +4,11 @@ import static com.quizze.quizze.cache.config.CacheConfig.ADMIN_OVERVIEW_CACHE;
 
 import com.quizze.quizze.quiz.domain.AttemptStatus;
 import com.quizze.quizze.quiz.domain.Quiz;
+import com.quizze.quizze.quiz.domain.QuizAnalyticsProjection;
 import com.quizze.quizze.quiz.domain.QuizAttempt;
 import com.quizze.quizze.quiz.dto.analytics.AdminOverviewItemResponse;
 import com.quizze.quizze.quiz.dto.analytics.AdminOverviewResponse;
+import com.quizze.quizze.quiz.repository.QuizAnalyticsProjectionRepository;
 import com.quizze.quizze.quiz.repository.QuizAttemptRepository;
 import com.quizze.quizze.quiz.repository.QuizRepository;
 import com.quizze.quizze.user.repository.UserRepository;
@@ -26,6 +28,7 @@ public class AdminOverviewService {
     private final UserRepository userRepository;
     private final QuizRepository quizRepository;
     private final QuizAttemptRepository quizAttemptRepository;
+    private final QuizAnalyticsProjectionRepository quizAnalyticsProjectionRepository;
 
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = ADMIN_OVERVIEW_CACHE, key = "'overview'")
@@ -44,9 +47,8 @@ public class AdminOverviewService {
                 .limit(5)
                 .toList();
 
-        List<AdminOverviewItemResponse> topPerformingQuizzes = quizzes.stream()
-                .map(quiz -> buildOverviewItem(quiz, submittedAttempts))
-                .filter(item -> item.getAttempts() > 0)
+        List<AdminOverviewItemResponse> topPerformingQuizzes = quizAnalyticsProjectionRepository.findAllBySubmittedAttemptsGreaterThan(0).stream()
+                .map(this::buildOverviewProjectionItem)
                 .sorted(Comparator.comparing(AdminOverviewItemResponse::getAveragePercentage, Comparator.reverseOrder())
                         .thenComparing(AdminOverviewItemResponse::getAttempts, Comparator.reverseOrder())
                         .thenComparing(AdminOverviewItemResponse::getQuizTitle))
@@ -88,6 +90,17 @@ public class AdminOverviewService {
                 .attempts(quizAttempts.size())
                 .averageScore(averageScore)
                 .averagePercentage(averagePercentage)
+                .build();
+    }
+
+    private AdminOverviewItemResponse buildOverviewProjectionItem(QuizAnalyticsProjection projection) {
+        return AdminOverviewItemResponse.builder()
+                .quizId(projection.getQuizId())
+                .quizTitle(projection.getQuizTitle())
+                .categoryName(projection.getCategoryName())
+                .attempts(projection.getSubmittedAttempts())
+                .averageScore(projection.getAverageScore())
+                .averagePercentage(projection.getAveragePercentage())
                 .build();
     }
 

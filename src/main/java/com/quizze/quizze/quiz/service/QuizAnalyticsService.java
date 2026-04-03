@@ -5,8 +5,10 @@ import static com.quizze.quizze.cache.config.CacheConfig.QUIZ_ANALYTICS_CACHE;
 import com.quizze.quizze.common.exception.ResourceNotFoundException;
 import com.quizze.quizze.quiz.domain.AttemptStatus;
 import com.quizze.quizze.quiz.domain.Quiz;
+import com.quizze.quizze.quiz.domain.QuizAnalyticsProjection;
 import com.quizze.quizze.quiz.domain.QuizAttempt;
 import com.quizze.quizze.quiz.dto.analytics.QuizPerformanceAnalyticsResponse;
+import com.quizze.quizze.quiz.repository.QuizAnalyticsProjectionRepository;
 import com.quizze.quizze.quiz.repository.QuizAttemptRepository;
 import com.quizze.quizze.quiz.repository.QuizRepository;
 import java.time.LocalDateTime;
@@ -25,6 +27,7 @@ public class QuizAnalyticsService {
 
     private final QuizRepository quizRepository;
     private final QuizAttemptRepository quizAttemptRepository;
+    private final QuizAnalyticsProjectionRepository quizAnalyticsProjectionRepository;
 
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = QUIZ_ANALYTICS_CACHE, key = "#quizId")
@@ -47,20 +50,28 @@ public class QuizAnalyticsService {
         long inProgressCount = attempts.stream().filter(attempt -> attempt.getStatus() == AttemptStatus.IN_PROGRESS).count();
         long expiredCount = attempts.stream().filter(attempt -> attempt.getStatus() == AttemptStatus.EXPIRED).count();
 
-        double averageScore = submittedAttempts.stream().mapToDouble(QuizAttempt::getScore).average().orElse(0.0);
-        double averagePercentage = submittedAttempts.stream()
+        QuizAnalyticsProjection projection = quizAnalyticsProjectionRepository.findByQuizId(quizId).orElse(null);
+        double averageScore = projection == null ? submittedAttempts.stream().mapToDouble(QuizAttempt::getScore).average().orElse(0.0)
+                : projection.getAverageScore();
+        double averagePercentage = projection == null ? submittedAttempts.stream()
                 .mapToDouble(attempt -> calculatePercentage(attempt.getScore(), maxScore))
                 .average()
-                .orElse(0.0);
-        double highestScore = submittedAttempts.stream().mapToDouble(QuizAttempt::getScore).max().orElse(0.0);
-        double lowestScore = submittedAttempts.stream().mapToDouble(QuizAttempt::getScore).min().orElse(0.0);
-        double averageCorrectAnswers = submittedAttempts.stream().mapToInt(QuizAttempt::getCorrectAnswers).average().orElse(0.0);
-        double averageWrongAnswers = submittedAttempts.stream().mapToInt(QuizAttempt::getWrongAnswers).average().orElse(0.0);
-        LocalDateTime lastSubmittedAt = submittedAttempts.stream()
+                .orElse(0.0)
+                : projection.getAveragePercentage();
+        double highestScore = projection == null ? submittedAttempts.stream().mapToDouble(QuizAttempt::getScore).max().orElse(0.0)
+                : projection.getHighestScore();
+        double lowestScore = projection == null ? submittedAttempts.stream().mapToDouble(QuizAttempt::getScore).min().orElse(0.0)
+                : projection.getLowestScore();
+        double averageCorrectAnswers = projection == null ? submittedAttempts.stream().mapToInt(QuizAttempt::getCorrectAnswers).average().orElse(0.0)
+                : projection.getAverageCorrectAnswers();
+        double averageWrongAnswers = projection == null ? submittedAttempts.stream().mapToInt(QuizAttempt::getWrongAnswers).average().orElse(0.0)
+                : projection.getAverageWrongAnswers();
+        LocalDateTime lastSubmittedAt = projection == null ? submittedAttempts.stream()
                 .map(QuizAttempt::getSubmittedAt)
                 .filter(java.util.Objects::nonNull)
                 .max(Comparator.naturalOrder())
-                .orElse(null);
+                .orElse(null)
+                : projection.getLastSubmittedAt();
 
         double completionRate = totalAttempts == 0 ? 0.0 : (submittedCount * 100.0) / totalAttempts;
         log.debug("Quiz analytics computed for quizId={} with totalAttempts={} and submittedAttempts={}", quizId, totalAttempts, submittedCount);

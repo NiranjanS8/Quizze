@@ -3,15 +3,14 @@ package com.quizze.quizze.quiz.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
-import com.quizze.quizze.audit.service.AdminAuditLogService;
+import com.quizze.quizze.audit.event.AdminActionEvent;
 import com.quizze.quizze.cache.service.QuizCacheInvalidationService;
 import com.quizze.quizze.common.exception.BadRequestException;
-import com.quizze.quizze.notification.event.QuizPublishedEvent;
 import com.quizze.quizze.quiz.domain.Category;
 import com.quizze.quizze.quiz.domain.DifficultyLevel;
 import com.quizze.quizze.quiz.domain.Question;
@@ -48,9 +47,6 @@ class AdminQuizServiceTest {
     private CategoryRepository categoryRepository;
 
     @Mock
-    private AdminAuditLogService adminAuditLogService;
-
-    @Mock
     private QuizCacheInvalidationService quizCacheInvalidationService;
 
     @Mock
@@ -65,14 +61,13 @@ class AdminQuizServiceTest {
                 questionRepository,
                 categoryRepository,
                 new AdminQuizMapper(),
-                adminAuditLogService,
                 quizCacheInvalidationService,
                 applicationEventPublisher
         );
     }
 
     @Test
-    void createQuizShouldCreateMissingCategoryAndAuditAction() {
+    void createQuizShouldCreateMissingCategoryAndPublishAuditAndQuizEvents() {
         QuizRequest request = new QuizRequest();
         request.setTitle("Java Basics");
         request.setDescription("Intro quiz");
@@ -96,12 +91,22 @@ class AdminQuizServiceTest {
         QuizResponse response = adminQuizService.createQuiz(1L, "admin", request);
 
         ArgumentCaptor<Category> categoryCaptor = ArgumentCaptor.forClass(Category.class);
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
         verify(categoryRepository).save(categoryCaptor.capture());
-        verify(adminAuditLogService).recordAction(eq(1L), eq("admin"), any(), eq("QUIZ"), eq(11L), eq("Java Basics"), any());
         verify(quizCacheInvalidationService).evictAnalyticsForQuiz(11L);
-        ArgumentCaptor<QuizPublishedEvent> eventCaptor = ArgumentCaptor.forClass(QuizPublishedEvent.class);
-        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue().quizId()).isEqualTo(11L);
+        verify(applicationEventPublisher, times(2)).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getAllValues()).anySatisfy(event -> {
+            assertThat(event).isInstanceOf(AdminActionEvent.class);
+            AdminActionEvent adminActionEvent = (AdminActionEvent) event;
+            assertThat(adminActionEvent.targetId()).isEqualTo(11L);
+            assertThat(adminActionEvent.targetType()).isEqualTo("QUIZ");
+        });
+        assertThat(eventCaptor.getAllValues()).anySatisfy(event -> {
+            assertThat(event).isInstanceOf(com.quizze.quizze.notification.event.QuizPublishedEvent.class);
+            com.quizze.quizze.notification.event.QuizPublishedEvent quizPublishedEvent =
+                    (com.quizze.quizze.notification.event.QuizPublishedEvent) event;
+            assertThat(quizPublishedEvent.quizId()).isEqualTo(11L);
+        });
 
         assertThat(categoryCaptor.getValue().getName()).isEqualTo("Programming");
         assertThat(response.getCategoryName()).isEqualTo("Programming");

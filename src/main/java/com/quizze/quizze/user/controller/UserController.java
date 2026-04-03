@@ -1,6 +1,8 @@
 package com.quizze.quizze.user.controller;
 
 import com.quizze.quizze.common.api.ApiResponse;
+import com.quizze.quizze.notification.dto.UserNotificationResponse;
+import com.quizze.quizze.notification.service.UserNotificationService;
 import com.quizze.quizze.quiz.dto.user.AttemptHistoryResponse;
 import com.quizze.quizze.quiz.dto.user.QuizResultResponse;
 import com.quizze.quizze.quiz.dto.user.UserPerformanceAnalyticsResponse;
@@ -27,6 +29,7 @@ public class UserController {
 
     private final UserQuizService userQuizService;
     private final UserProfileMapper userProfileMapper;
+    private final UserNotificationService userNotificationService;
 
     @GetMapping("/me")
     @Operation(
@@ -99,6 +102,21 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(
                 "User performance analytics fetched successfully",
                 userQuizService.getUserPerformanceAnalytics(currentUser.getUser().getId())
+        ));
+    }
+
+    @GetMapping("/me/notifications")
+    @Operation(
+            summary = "Get current user notifications",
+            description = "Returns the latest in-app notifications for the authenticated user.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<List<UserNotificationResponse>>> getNotifications(
+            @AuthenticationPrincipal CustomUserDetails currentUser
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "User notifications fetched successfully",
+                userNotificationService.getNotifications(currentUser.getUser().getId())
         ));
     }
 }
