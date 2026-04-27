@@ -17,6 +17,7 @@ import com.quizze.quizze.quiz.dto.user.AttemptQuestionsResponse;
 import com.quizze.quizze.quiz.dto.user.QuizCatalogResponse;
 import com.quizze.quizze.quiz.dto.user.QuizDetailResponse;
 import com.quizze.quizze.quiz.dto.user.QuizResultResponse;
+import com.quizze.quizze.quiz.dto.user.SaveAttemptAnswerRequest;
 import com.quizze.quizze.quiz.dto.user.StartQuizResponse;
 import com.quizze.quizze.quiz.dto.user.SubmitAnswerRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizRequest;
@@ -116,7 +117,14 @@ public class UserQuizService {
             throw new BadRequestException("This quiz is not ready yet because it has no questions");
         }
 
-        if (quiz.isOneAttemptOnly() && !quizAttemptRepository.findByUserIdAndQuizId(userId, quizId).isEmpty()) {
+        List<QuizAttempt> existingAttempts = quizAttemptRepository.findByUserIdAndQuizId(userId, quizId);
+        QuizAttempt resumableAttempt = findResumableAttempt(existingAttempts);
+        if (resumableAttempt != null) {
+            log.info("Resuming quiz attemptId={} for userId={} and quizId={}", resumableAttempt.getId(), userId, quizId);
+            return userQuizMapper.toStartQuizResponse(resumableAttempt, calculateExpiresAt(resumableAttempt));
+        }
+
+        if (quiz.isOneAttemptOnly() && !existingAttempts.isEmpty()) {
             throw new BadRequestException("This quiz can only be attempted once");
         }
 
@@ -133,6 +141,48 @@ public class UserQuizService {
         applicationMetricsService.increment("quizze.quiz.attempt.started");
 
         return userQuizMapper.toStartQuizResponse(savedAttempt, expiresAt);
+    }
+
+    @Transactional
+    public void saveAttemptAnswer(Long attemptId, Long userId, SaveAttemptAnswerRequest request) {
+        log.debug("Saving draft answer for attemptId={}, userId={}, questionId={}", attemptId, userId, request.getQuestionId());
+        QuizAttempt attempt = getUserAttempt(attemptId, userId);
+
+        if (attempt.getStatus() != AttemptStatus.IN_PROGRESS) {
+            throw new BadRequestException("Only in-progress attempts can be updated");
+        }
+
+        if (isTimedOut(attempt)) {
+            attempt.setStatus(AttemptStatus.EXPIRED);
+            attempt.setSubmittedAt(LocalDateTime.now());
+            applicationMetricsService.increment("quizze.quiz.attempt.expired");
+            throw new BadRequestException("Quiz attempt has expired and can no longer be updated");
+        }
+
+        Question question = attempt.getQuiz().getQuestions().stream()
+                .filter(item -> item.getId().equals(request.getQuestionId()))
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException("Question does not belong to this quiz"));
+
+        Option selectedOption = question.getOptions().stream()
+                .filter(option -> option.getId().equals(request.getSelectedOptionId()))
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException("Selected option does not belong to the given question"));
+
+        AttemptAnswer answer = attempt.getAnswers().stream()
+                .filter(item -> item.getQuestion().getId().equals(question.getId()))
+                .findFirst()
+                .orElseGet(() -> {
+                    AttemptAnswer draftAnswer = new AttemptAnswer();
+                    draftAnswer.setQuizAttempt(attempt);
+                    draftAnswer.setQuestion(question);
+                    attempt.getAnswers().add(draftAnswer);
+                    return draftAnswer;
+                });
+
+        answer.setSelectedOption(selectedOption);
+        answer.setCorrect(null);
+        applicationMetricsService.increment("quizze.quiz.answer.saved");
     }
 
     @Transactional(readOnly = true)
@@ -359,6 +409,23 @@ public class UserQuizService {
     private User getUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+    }
+
+    private QuizAttempt findResumableAttempt(List<QuizAttempt> attempts) {
+        return attempts.stream()
+                .filter(attempt -> attempt.getStatus() == AttemptStatus.IN_PROGRESS)
+                .max(Comparator.comparing(QuizAttempt::getStartedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .filter(attempt -> {
+                    if (!isTimedOut(attempt)) {
+                        return true;
+                    }
+
+                    attempt.setStatus(AttemptStatus.EXPIRED);
+                    attempt.setSubmittedAt(LocalDateTime.now());
+                    applicationMetricsService.increment("quizze.quiz.attempt.expired");
+                    return false;
+                })
+                .orElse(null);
     }
 
     private AttemptHistoryResponse toAttemptHistoryResponse(QuizAttempt attempt) {

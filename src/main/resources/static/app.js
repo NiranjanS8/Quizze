@@ -719,9 +719,19 @@ function bindAppEvents() {
   });
 
   document.querySelectorAll("[data-action='select-option']").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.answers[button.dataset.question] = Number(button.dataset.option);
+    button.addEventListener("click", async () => {
+      const questionId = Number(button.dataset.question);
+      const selectedOptionId = Number(button.dataset.option);
+      state.answers[questionId] = selectedOptionId;
       render();
+      try {
+        await api(`/api/quizzes/attempts/${state.attempt.attemptId}/answers`, {
+          method: "PATCH",
+          body: JSON.stringify({ questionId, selectedOptionId }),
+        });
+      } catch (error) {
+        showError(error.message);
+      }
     });
   });
 
@@ -847,10 +857,16 @@ async function openQuizDetail(id) {
 async function startQuiz(id) {
   try {
     const attempt = await api(`/api/quizzes/${id}/start`, { method: "POST" });
-    const questions = await api(`/api/quizzes/attempts/${attempt.attemptId}/questions`);
+    const attemptQuestions = await api(`/api/quizzes/attempts/${attempt.attemptId}/questions`);
+    const questions = attemptQuestions.questions || [];
     state.attempt = { ...attempt, currentIndex: 0 };
     state.attemptQuestions = questions;
     state.answers = {};
+    questions.forEach((question) => {
+      if (question.selectedOptionId) {
+        state.answers[question.id] = question.selectedOptionId;
+      }
+    });
     state.view = "quiz-attempt";
     state.error = "";
     scheduleAttemptAutoSubmit(attempt.expiresAt);

@@ -22,6 +22,7 @@ import com.quizze.quizze.quiz.dto.user.UserPerformanceTrendItemResponse;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
@@ -60,6 +61,14 @@ public class UserQuizMapper {
             boolean timeExpired,
             List<Question> orderedQuestions
     ) {
+        Map<Long, Long> selectedOptionIdsByQuestionId = attempt.getAnswers().stream()
+                .filter(answer -> answer.getSelectedOption() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        answer -> answer.getQuestion().getId(),
+                        answer -> answer.getSelectedOption().getId(),
+                        (existing, replacement) -> replacement
+                ));
+
         return AttemptQuestionsResponse.builder()
                 .attemptId(attempt.getId())
                 .quizId(attempt.getQuiz().getId())
@@ -68,7 +77,9 @@ public class UserQuizMapper {
                 .expiresAt(expiresAt)
                 .timeLimitInMinutes(attempt.getQuiz().getTimeLimitInMinutes())
                 .timeExpired(timeExpired)
-                .questions(orderedQuestions.stream().map(this::toAttemptQuestionResponse).toList())
+                .questions(orderedQuestions.stream()
+                        .map(question -> toAttemptQuestionResponse(question, selectedOptionIdsByQuestionId.get(question.getId())))
+                        .toList())
                 .build();
     }
 
@@ -212,11 +223,12 @@ public class UserQuizMapper {
                 .build();
     }
 
-    private AttemptQuestionResponse toAttemptQuestionResponse(Question question) {
+    private AttemptQuestionResponse toAttemptQuestionResponse(Question question, Long selectedOptionId) {
         return AttemptQuestionResponse.builder()
                 .id(question.getId())
                 .content(question.getContent())
                 .points(question.getPoints())
+                .selectedOptionId(selectedOptionId)
                 .options(question.getOptions().stream()
                         .sorted(Comparator.comparing(Option::getId))
                         .map(this::toAttemptOptionResponse)

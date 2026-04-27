@@ -14,6 +14,9 @@ import com.quizze.quizze.quiz.domain.Question;
 import com.quizze.quizze.quiz.domain.Quiz;
 import com.quizze.quizze.quiz.domain.QuizAttempt;
 import com.quizze.quizze.quiz.event.QuizSubmittedEvent;
+import com.quizze.quizze.quiz.dto.user.AttemptQuestionsResponse;
+import com.quizze.quizze.quiz.dto.user.SaveAttemptAnswerRequest;
+import com.quizze.quizze.quiz.dto.user.StartQuizResponse;
 import com.quizze.quizze.quiz.dto.user.SubmitAnswerRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizRequest;
 import com.quizze.quizze.quiz.dto.user.SubmitQuizResponse;
@@ -85,6 +88,70 @@ class UserQuizServiceTest {
         assertThatThrownBy(() -> userQuizService.startQuiz(12L, 3L))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage("This quiz can only be attempted once");
+    }
+
+    @Test
+    void startQuizShouldResumeExistingInProgressAttempt() {
+        Quiz quiz = new Quiz();
+        quiz.setId(12L);
+        quiz.setTitle("Spring Boot");
+        quiz.setPublished(true);
+        quiz.getQuestions().add(question(1L, "Question", 5, option(11L, "Answer", true)));
+
+        User user = user(3L, "learner");
+        QuizAttempt existingAttempt = new QuizAttempt();
+        existingAttempt.setId(90L);
+        existingAttempt.setQuiz(quiz);
+        existingAttempt.setUser(user);
+        existingAttempt.setStatus(AttemptStatus.IN_PROGRESS);
+        existingAttempt.setStartedAt(LocalDateTime.now().minusMinutes(2));
+
+        when(quizRepository.findPublishedByIdForUpdate(12L)).thenReturn(Optional.of(quiz));
+        when(userRepository.findById(3L)).thenReturn(Optional.of(user));
+        when(quizAttemptRepository.findByUserIdAndQuizId(3L, 12L)).thenReturn(List.of(existingAttempt));
+
+        StartQuizResponse response = userQuizService.startQuiz(12L, 3L);
+
+        assertThat(response.getAttemptId()).isEqualTo(90L);
+        assertThat(response.getStatus()).isEqualTo(AttemptStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void saveAttemptAnswerShouldPersistDraftAndReturnItWithQuestions() {
+        Quiz quiz = new Quiz();
+        quiz.setId(25L);
+        quiz.setTitle("Java Fundamentals");
+        Question question = question(
+                101L,
+                "Inheritance keyword",
+                5,
+                option(1001L, "extends", true),
+                option(1002L, "implements", false)
+        );
+        question.setQuiz(quiz);
+        quiz.getQuestions().add(question);
+
+        QuizAttempt attempt = new QuizAttempt();
+        attempt.setId(50L);
+        attempt.setQuiz(quiz);
+        attempt.setUser(user(7L, "learner"));
+        attempt.setStatus(AttemptStatus.IN_PROGRESS);
+        attempt.setStartedAt(LocalDateTime.now().minusMinutes(2));
+        attempt.setQuestionOrder("101");
+
+        SaveAttemptAnswerRequest request = new SaveAttemptAnswerRequest();
+        request.setQuestionId(101L);
+        request.setSelectedOptionId(1001L);
+
+        when(quizAttemptRepository.findByIdAndUserId(50L, 7L)).thenReturn(Optional.of(attempt));
+
+        userQuizService.saveAttemptAnswer(50L, 7L, request);
+        AttemptQuestionsResponse response = userQuizService.getAttemptQuestions(50L, 7L);
+
+        assertThat(attempt.getAnswers()).hasSize(1);
+        assertThat(attempt.getAnswers().get(0).getSelectedOption().getId()).isEqualTo(1001L);
+        assertThat(attempt.getAnswers().get(0).getCorrect()).isNull();
+        assertThat(response.getQuestions().get(0).getSelectedOptionId()).isEqualTo(1001L);
     }
 
     @Test

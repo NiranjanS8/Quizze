@@ -1271,6 +1271,14 @@ function AttemptPage({ auth, setError, setMessage }) {
     apiRequest(`/api/quizzes/attempts/${attemptId}/questions`, {}, auth.token)
       .then((data) => {
         setAttemptData(data);
+        const savedAnswers = {};
+        (data.questions || []).forEach((question) => {
+          if (question.selectedOptionId) {
+            savedAnswers[question.id] = question.selectedOptionId;
+          }
+        });
+        answersRef.current = savedAnswers;
+        setAnswers(savedAnswers);
         setTimeLeft(formatRemainingTime(data.expiresAt));
         setError("");
       })
@@ -1340,6 +1348,25 @@ function AttemptPage({ auth, setError, setMessage }) {
     }
   }
 
+  function selectOption(questionId, optionId) {
+    const nextAnswers = { ...answersRef.current, [questionId]: optionId };
+    answersRef.current = nextAnswers;
+    setAnswers(nextAnswers);
+    setError("");
+
+    apiRequest(
+      `/api/quizzes/attempts/${attemptId}/answers`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          questionId,
+          selectedOptionId: optionId,
+        }),
+      },
+      auth.token,
+    ).catch((saveError) => setError(saveError.message));
+  }
+
   return (
     <section className="quiz-screen">
       <section className="attempt-header">
@@ -1373,7 +1400,7 @@ function AttemptPage({ auth, setError, setMessage }) {
               className={`option-btn${selected ? " selected" : ""}`}
               disabled={submitting}
               key={option.id}
-              onClick={() => setAnswers((current) => ({ ...current, [question.id]: option.id }))}
+              onClick={() => selectOption(question.id, option.id)}
               type="button"
             >
               <span className="option-badge">{String.fromCharCode(65 + index)}</span>

@@ -11,5 +11,6 @@ public class AttemptQuestionResponse {
     private final Long id;
     private final String content;
     private final Integer points;
+    private final Long selectedOptionId;
     private final List<AttemptOptionResponse> options;
 }
