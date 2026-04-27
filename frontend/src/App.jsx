@@ -13,6 +13,9 @@ import {
 const STORAGE_TOKEN = "quizze_token";
 const STORAGE_REFRESH_TOKEN = "quizze_refresh_token";
 const STORAGE_USER = "quizze_user";
+const AUTH_UPDATED_EVENT = "quizze-auth-updated";
+
+let refreshPromise = null;
 
 function readStoredUser() {
   try {
@@ -32,23 +35,68 @@ function initials(name) {
 }
 
 async function apiRequest(path, options = {}, token) {
+  const { skipAuthRefresh = false, authRetry = false, ...fetchOptions } = options;
   const headers = {
     "Content-Type": "application/json",
-    ...(options.headers || {}),
+    ...(fetchOptions.headers || {}),
   };
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(path, { ...options, headers });
+  const response = await fetch(path, { ...fetchOptions, headers });
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    if (response.status === 401 && !skipAuthRefresh && !authRetry && canRefresh(path)) {
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) {
+        return apiRequest(path, { ...options, authRetry: true }, refreshedToken);
+      }
+    }
+
     throw new Error(payload?.message || "Request failed");
   }
 
   return payload.data;
+}
+
+function canRefresh(path) {
+  return path !== "/api/auth/refresh" && path !== "/api/auth/logout" && Boolean(localStorage.getItem(STORAGE_REFRESH_TOKEN));
+}
+
+async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken: localStorage.getItem(STORAGE_REFRESH_TOKEN) }),
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload?.data?.accessToken) {
+          throw new Error(payload?.message || "Unable to refresh session");
+        }
+
+        localStorage.setItem(STORAGE_TOKEN, payload.data.accessToken);
+        localStorage.setItem(STORAGE_REFRESH_TOKEN, payload.data.refreshToken || "");
+        window.dispatchEvent(new Event(AUTH_UPDATED_EVENT));
+        return payload.data.accessToken;
+      })
+      .catch(() => {
+        localStorage.removeItem(STORAGE_TOKEN);
+        localStorage.removeItem(STORAGE_REFRESH_TOKEN);
+        localStorage.removeItem(STORAGE_USER);
+        window.dispatchEvent(new Event(AUTH_UPDATED_EVENT));
+        return "";
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
 }
 
 function buildQueryString(params) {
@@ -205,11 +253,7 @@ export default function App() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    function handleStorageChange(event) {
-      if (event.key !== STORAGE_TOKEN && event.key !== STORAGE_REFRESH_TOKEN && event.key !== STORAGE_USER) {
-        return;
-      }
-
+    function syncAuthFromStorage() {
       const nextToken = localStorage.getItem(STORAGE_TOKEN) || "";
       const nextRefreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN) || "";
       const nextUser = readStoredUser();
@@ -221,8 +265,20 @@ export default function App() {
       setError("");
     }
 
+    function handleStorageChange(event) {
+      if (event.key !== STORAGE_TOKEN && event.key !== STORAGE_REFRESH_TOKEN && event.key !== STORAGE_USER) {
+        return;
+      }
+
+      syncAuthFromStorage();
+    }
+
     window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+    window.addEventListener(AUTH_UPDATED_EVENT, syncAuthFromStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener(AUTH_UPDATED_EVENT, syncAuthFromStorage);
+    };
   }, []);
 
   const auth = useMemo(
@@ -250,6 +306,7 @@ export default function App() {
         localStorage.removeItem(STORAGE_TOKEN);
         localStorage.removeItem(STORAGE_REFRESH_TOKEN);
         localStorage.removeItem(STORAGE_USER);
+        window.dispatchEvent(new Event(AUTH_UPDATED_EVENT));
         setToken("");
         setRefreshToken("");
         setUser(null);

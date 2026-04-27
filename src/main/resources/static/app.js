@@ -1,5 +1,6 @@
 const state = {
   token: localStorage.getItem("quizze_token") || "",
+  refreshToken: localStorage.getItem("quizze_refresh_token") || "",
   user: JSON.parse(localStorage.getItem("quizze_user") || "null"),
   view: "loading",
   authMode: "login",
@@ -22,6 +23,7 @@ const state = {
 };
 
 const app = document.getElementById("app");
+let refreshPromise = null;
 
 function setState(patch) {
   Object.assign(state, patch);
@@ -30,6 +32,7 @@ function setState(patch) {
 
 function persistAuth(authResponse) {
   state.token = authResponse.accessToken;
+  state.refreshToken = authResponse.refreshToken || "";
   state.user = {
     id: authResponse.userId,
     username: authResponse.username,
@@ -37,15 +40,18 @@ function persistAuth(authResponse) {
     role: authResponse.role,
   };
   localStorage.setItem("quizze_token", state.token);
+  localStorage.setItem("quizze_refresh_token", state.refreshToken);
   localStorage.setItem("quizze_user", JSON.stringify(state.user));
 }
 
 function clearAuth() {
   clearAttemptAutoSubmit();
   localStorage.removeItem("quizze_token");
+  localStorage.removeItem("quizze_refresh_token");
   localStorage.removeItem("quizze_user");
   Object.assign(state, {
     token: "",
+    refreshToken: "",
     user: null,
     quizzes: [],
     quizDetail: null,
@@ -62,24 +68,67 @@ function clearAuth() {
 }
 
 async function api(path, options = {}) {
+  const { skipAuthRefresh = false, authRetry = false, ...fetchOptions } = options;
   const headers = {
     "Content-Type": "application/json",
-    ...(options.headers || {}),
+    ...(fetchOptions.headers || {}),
   };
 
   if (state.token) {
     headers.Authorization = `Bearer ${state.token}`;
   }
 
-  const response = await fetch(path, { ...options, headers });
+  const response = await fetch(path, { ...fetchOptions, headers });
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    if (response.status === 401 && !skipAuthRefresh && !authRetry && canRefresh(path)) {
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) {
+        return api(path, { ...options, authRetry: true });
+      }
+    }
+
     const message = payload?.message || "Request failed";
     throw new Error(message);
   }
 
   return payload.data;
+}
+
+function canRefresh(path) {
+  return path !== "/api/auth/refresh" && path !== "/api/auth/logout" && Boolean(state.refreshToken);
+}
+
+async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken: state.refreshToken }),
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload?.data?.accessToken) {
+          throw new Error(payload?.message || "Unable to refresh session");
+        }
+
+        state.token = payload.data.accessToken;
+        state.refreshToken = payload.data.refreshToken || "";
+        localStorage.setItem("quizze_token", state.token);
+        localStorage.setItem("quizze_refresh_token", state.refreshToken);
+        return state.token;
+      })
+      .catch(() => {
+        clearAuth();
+        return "";
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
 }
 
 function initials(name) {
@@ -705,7 +754,14 @@ function bindAppEvents() {
     });
   });
 
-  document.getElementById("logout-btn")?.addEventListener("click", () => {
+  document.getElementById("logout-btn")?.addEventListener("click", async () => {
+    if (state.refreshToken) {
+      await api("/api/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({ refreshToken: state.refreshToken }),
+        skipAuthRefresh: true,
+      }).catch(() => null);
+    }
     clearAuth();
     render();
   });
