@@ -69,7 +69,7 @@ function formatRemainingTime(targetTime) {
     return null;
   }
 
-  const diff = new Date(targetTime).getTime() - Date.now();
+  const diff = getRemainingMs(targetTime);
   if (diff <= 0) {
     return "00:00";
   }
@@ -78,6 +78,14 @@ function formatRemainingTime(targetTime) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
   const seconds = String(totalSeconds % 60).padStart(2, "0");
   return `${minutes}:${seconds}`;
+}
+
+function getRemainingMs(targetTime) {
+  if (!targetTime) {
+    return null;
+  }
+
+  return new Date(targetTime).getTime() - Date.now();
 }
 
 function formatDateTime(value) {
@@ -1252,6 +1260,12 @@ function AttemptPage({ auth, setError, setMessage }) {
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
+  const answersRef = useRef({});
+  const submitStartedRef = useRef(false);
+
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
 
   useEffect(() => {
     apiRequest(`/api/quizzes/attempts/${attemptId}/questions`, {}, auth.token)
@@ -1264,22 +1278,23 @@ function AttemptPage({ auth, setError, setMessage }) {
   }, [attemptId, auth.token, setError]);
 
   useEffect(() => {
-    if (!attemptData?.expiresAt || submitting) {
+    if (!attemptData?.expiresAt || submitStartedRef.current) {
       return undefined;
     }
 
     const intervalId = window.setInterval(() => {
+      const remainingMs = getRemainingMs(attemptData.expiresAt);
       const nextValue = formatRemainingTime(attemptData.expiresAt);
       setTimeLeft(nextValue);
 
-      if (nextValue === "00:00") {
+      if (remainingMs !== null && remainingMs <= 1000) {
         window.clearInterval(intervalId);
         submitQuiz(true);
       }
-    }, 1000);
+    }, 250);
 
     return () => window.clearInterval(intervalId);
-  }, [answers, attemptData?.expiresAt, submitting]);
+  }, [attemptData?.expiresAt]);
 
   if (!attemptData?.questions?.length) {
     return <Card>Loading attempt questions...</Card>;
@@ -1291,18 +1306,24 @@ function AttemptPage({ auth, setError, setMessage }) {
   const progress = questions.length ? (answeredCount / questions.length) * 100 : 0;
 
   async function submitQuiz(autoSubmitted = false) {
+    if (submitStartedRef.current) {
+      return;
+    }
+
+    submitStartedRef.current = true;
     setSubmitting(true);
     try {
+      const currentAnswers = answersRef.current;
       const response = await apiRequest(
         `/api/quizzes/attempts/${attemptId}/submit`,
         {
           method: "POST",
           body: JSON.stringify({
             answers: questions
-              .filter((item) => answers[item.id])
+              .filter((item) => currentAnswers[item.id])
               .map((item) => ({
                 questionId: item.id,
-                selectedOptionId: answers[item.id],
+                selectedOptionId: currentAnswers[item.id],
               })),
           }),
         },
@@ -1313,6 +1334,7 @@ function AttemptPage({ auth, setError, setMessage }) {
       navigate(`/results/${attemptId}`);
     } catch (submitError) {
       setError(submitError.message);
+      submitStartedRef.current = false;
     } finally {
       setSubmitting(false);
     }
@@ -1349,6 +1371,7 @@ function AttemptPage({ auth, setError, setMessage }) {
           return (
             <button
               className={`option-btn${selected ? " selected" : ""}`}
+              disabled={submitting}
               key={option.id}
               onClick={() => setAnswers((current) => ({ ...current, [question.id]: option.id }))}
               type="button"
@@ -1365,7 +1388,7 @@ function AttemptPage({ auth, setError, setMessage }) {
           Previous
         </Button>
         {currentIndex === questions.length - 1 ? (
-          <Button className="primary-btn" disabled={submitting} onClick={submitQuiz} type="button">
+          <Button className="primary-btn" disabled={submitting} onClick={() => submitQuiz(false)} type="button">
             {submitting ? "Submitting..." : "Submit Quiz"}
           </Button>
         ) : (

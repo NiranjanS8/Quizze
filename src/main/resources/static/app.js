@@ -7,6 +7,7 @@ const state = {
   quizDetail: null,
   attempt: null,
   attemptQuestions: [],
+  autoSubmitTimerId: null,
   answers: {},
   attemptHistory: [],
   resultHistory: [],
@@ -40,6 +41,7 @@ function persistAuth(authResponse) {
 }
 
 function clearAuth() {
+  clearAttemptAutoSubmit();
   localStorage.removeItem("quizze_token");
   localStorage.removeItem("quizze_user");
   Object.assign(state, {
@@ -49,6 +51,7 @@ function clearAuth() {
     quizDetail: null,
     attempt: null,
     attemptQuestions: [],
+    autoSubmitTimerId: null,
     answers: {},
     attemptHistory: [],
     resultHistory: [],
@@ -106,6 +109,24 @@ function showError(error) {
   state.error = error;
   state.message = "";
   render();
+}
+
+function clearAttemptAutoSubmit() {
+  if (state.autoSubmitTimerId) {
+    window.clearTimeout(state.autoSubmitTimerId);
+    state.autoSubmitTimerId = null;
+  }
+}
+
+function scheduleAttemptAutoSubmit(expiresAt) {
+  clearAttemptAutoSubmit();
+  if (!expiresAt) {
+    return;
+  }
+
+  const remainingMs = new Date(expiresAt).getTime() - Date.now();
+  const submitInMs = Math.max(0, remainingMs - 1000);
+  state.autoSubmitTimerId = window.setTimeout(() => submitAttempt(true), submitInMs);
 }
 
 function authShell() {
@@ -720,7 +741,7 @@ function bindAppEvents() {
     render();
   });
 
-  document.querySelector("[data-action='submit-quiz']")?.addEventListener("click", submitAttempt);
+  document.querySelector("[data-action='submit-quiz']")?.addEventListener("click", () => submitAttempt(false));
 
   document.querySelectorAll("[data-action='open-result']").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -832,25 +853,28 @@ async function startQuiz(id) {
     state.answers = {};
     state.view = "quiz-attempt";
     state.error = "";
+    scheduleAttemptAutoSubmit(attempt.expiresAt);
     render();
   } catch (error) {
     showError(error.message);
   }
 }
 
-async function submitAttempt() {
+async function submitAttempt(autoSubmitted = false) {
   const unanswered = state.attemptQuestions.find((question) => !state.answers[question.id]);
-  if (unanswered) {
+  if (unanswered && !autoSubmitted) {
     showError("Answer every question before submitting.");
     return;
   }
 
   try {
     const payload = {
-      answers: state.attemptQuestions.map((question) => ({
-        questionId: question.id,
-        selectedOptionId: state.answers[question.id],
-      })),
+      answers: state.attemptQuestions
+        .filter((question) => state.answers[question.id])
+        .map((question) => ({
+          questionId: question.id,
+          selectedOptionId: state.answers[question.id],
+        })),
     };
 
     await api(`/api/quizzes/attempts/${state.attempt.attemptId}/submit`, {
@@ -863,7 +887,9 @@ async function submitAttempt() {
     state.view = "results";
     state.attempt = null;
     state.attemptQuestions = [];
+    clearAttemptAutoSubmit();
     state.answers = {};
+    state.message = autoSubmitted ? "Time ended. Quiz submitted automatically." : "";
     render();
   } catch (error) {
     showError(error.message);

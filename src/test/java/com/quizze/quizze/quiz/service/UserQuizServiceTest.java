@@ -175,6 +175,37 @@ class UserQuizServiceTest {
         verify(applicationMetricsService).increment("quizze.quiz.attempt.expired");
     }
 
+    @Test
+    void submitQuizShouldAllowEmptyAnswersForAutoSubmit() {
+        Quiz quiz = new Quiz();
+        quiz.setId(31L);
+        quiz.setTitle("Auto Submit Quiz");
+        Question question = question(301L, "Question", 5, option(3001L, "Answer", true));
+        question.setQuiz(quiz);
+        quiz.getQuestions().add(question);
+
+        QuizAttempt attempt = new QuizAttempt();
+        attempt.setId(61L);
+        attempt.setQuiz(quiz);
+        attempt.setUser(user(9L, "learner"));
+        attempt.setStatus(AttemptStatus.IN_PROGRESS);
+        attempt.setStartedAt(LocalDateTime.now());
+        attempt.setQuestionOrder("301");
+
+        SubmitQuizRequest request = new SubmitQuizRequest();
+        request.setAnswers(List.of());
+
+        when(quizAttemptRepository.findByIdAndUserId(61L, 9L)).thenReturn(Optional.of(attempt));
+
+        SubmitQuizResponse response = userQuizService.submitQuiz(61L, 9L, request);
+
+        assertThat(attempt.getStatus()).isEqualTo(AttemptStatus.SUBMITTED);
+        assertThat(attempt.getScore()).isZero();
+        assertThat(attempt.getCorrectAnswers()).isZero();
+        assertThat(attempt.getWrongAnswers()).isZero();
+        assertThat(response.getPercentage()).isZero();
+    }
+
     private User user(Long id, String username) {
         Role role = new Role();
         role.setName(RoleType.USER);
