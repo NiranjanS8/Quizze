@@ -1664,6 +1664,30 @@ function ResultDetailPage({ auth, setError }) {
   );
 }
 
+function createBlankQuestionDraft() {
+  return {
+    content: "",
+    points: 1,
+    options: [
+      { content: "", correct: true },
+      { content: "", correct: false },
+      { content: "", correct: false },
+      { content: "", correct: false },
+    ],
+  };
+}
+
+function toQuestionDraft(question) {
+  return {
+    content: question?.content || "",
+    points: question?.points ?? 1,
+    options: (question?.options?.length ? question.options : createBlankQuestionDraft().options).map((option, index) => ({
+      content: option.content || "",
+      correct: Boolean(option.correct) || (!question?.options?.some((item) => item.correct) && index === 0),
+    })),
+  };
+}
+
 function AdminPage({ auth, setError, setMessage, section = "dashboard" }) {
   const [quizzes, setQuizzes] = useState([]);
   const [overview, setOverview] = useState(null);
@@ -1676,6 +1700,10 @@ function AdminPage({ auth, setError, setMessage, section = "dashboard" }) {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [openQuizMenuId, setOpenQuizMenuId] = useState(null);
+  const [questionMode, setQuestionMode] = useState("create");
+  const [activeQuestion, setActiveQuestion] = useState(null);
+  const [questionDraft, setQuestionDraft] = useState(() => createBlankQuestionDraft());
+  const [questionSaving, setQuestionSaving] = useState(false);
 
   async function loadQuizzes() {
     try {
@@ -1723,6 +1751,17 @@ function AdminPage({ auth, setError, setMessage, section = "dashboard" }) {
     setSelectedDifficulty(activeQuiz?.difficulty || "MEDIUM");
   }, [activeQuiz, mode]);
 
+  const questionQuiz = useMemo(
+    () => quizzes.find((quiz) => quiz.id === selectedQuizId) || quizzes[0] || null,
+    [quizzes, selectedQuizId],
+  );
+
+  useEffect(() => {
+    if (!questionQuiz && quizzes.length) {
+      setSelectedQuizId(quizzes[0].id);
+    }
+  }, [questionQuiz, quizzes]);
+
   async function handleSubmit(event) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -1765,6 +1804,104 @@ function AdminPage({ auth, setError, setMessage, section = "dashboard" }) {
     try {
       await apiRequest(`/api/admin/quizzes/${quizId}`, { method: "DELETE" }, auth.token);
       setMessage("Quiz deleted successfully.");
+      await loadQuizzes();
+    } catch (deleteError) {
+      setError(deleteError.message);
+    }
+  }
+
+  function resetQuestionEditor() {
+    setQuestionMode("create");
+    setActiveQuestion(null);
+    setQuestionDraft(createBlankQuestionDraft());
+  }
+
+  function updateDraftOption(index, patch) {
+    setQuestionDraft((current) => ({
+      ...current,
+      options: current.options.map((option, optionIndex) => {
+        if (optionIndex !== index) {
+          return patch.correct ? { ...option, correct: false } : option;
+        }
+        return { ...option, ...patch };
+      }),
+    }));
+  }
+
+  function addDraftOption() {
+    setQuestionDraft((current) => {
+      if (current.options.length >= 6) {
+        return current;
+      }
+      return { ...current, options: [...current.options, { content: "", correct: false }] };
+    });
+  }
+
+  function removeDraftOption(index) {
+    setQuestionDraft((current) => {
+      if (current.options.length <= 2) {
+        return current;
+      }
+
+      const nextOptions = current.options.filter((_, optionIndex) => optionIndex !== index);
+      if (!nextOptions.some((option) => option.correct)) {
+        nextOptions[0] = { ...nextOptions[0], correct: true };
+      }
+      return { ...current, options: nextOptions };
+    });
+  }
+
+  function editQuestion(question) {
+    setQuestionMode("edit");
+    setActiveQuestion(question);
+    setQuestionDraft(toQuestionDraft(question));
+  }
+
+  async function handleQuestionSubmit(event) {
+    event.preventDefault();
+    if (!questionQuiz) {
+      setError("Select a quiz before adding questions.");
+      return;
+    }
+
+    const body = {
+      content: questionDraft.content,
+      points: Number(questionDraft.points),
+      options: questionDraft.options.map((option) => ({
+        content: option.content,
+        correct: Boolean(option.correct),
+      })),
+    };
+
+    setQuestionSaving(true);
+    try {
+      if (questionMode === "edit" && activeQuestion?.id) {
+        await apiRequest(`/api/admin/questions/${activeQuestion.id}`, { method: "PUT", body: JSON.stringify(body) }, auth.token);
+        setMessage("Question updated successfully.");
+      } else {
+        await apiRequest(`/api/admin/quizzes/${questionQuiz.id}/questions`, { method: "POST", body: JSON.stringify(body) }, auth.token);
+        setMessage("Question added successfully.");
+      }
+      resetQuestionEditor();
+      await loadQuizzes();
+    } catch (questionError) {
+      setError(questionError.message);
+    } finally {
+      setQuestionSaving(false);
+    }
+  }
+
+  async function handleQuestionDelete(questionId) {
+    if (!window.confirm("Delete this question?")) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/api/admin/questions/${questionId}`, { method: "DELETE" }, auth.token);
+      setMessage("Question deleted successfully.");
+      if (activeQuestion?.id === questionId) {
+        resetQuestionEditor();
+      }
       await loadQuizzes();
     } catch (deleteError) {
       setError(deleteError.message);
@@ -1862,6 +1999,7 @@ function AdminPage({ auth, setError, setMessage, section = "dashboard" }) {
       ) : null}
 
       {showQuizSection ? (
+      <>
       <section className="dashboard-grid admin-layout">
         <Card>
           <div className="panel-title-row">
@@ -2009,6 +2147,133 @@ function AdminPage({ auth, setError, setMessage, section = "dashboard" }) {
           </div>
         </Card>
       </section>
+      <section className="dashboard-grid admin-question-layout">
+        <Card>
+          <div className="panel-title-row">
+            <div>
+              <h3 className="panel-title">Question Bank</h3>
+              <div className="muted tiny">{questionQuiz ? questionQuiz.title : "Create a quiz to add questions"}</div>
+            </div>
+            {questionMode === "edit" ? (
+              <Button className="ghost-btn" onClick={resetQuestionEditor} type="button">
+                New Question
+              </Button>
+            ) : null}
+          </div>
+
+          <div className="form-grid question-editor-controls">
+            <CustomSelect
+              label="Quiz"
+              name="questionQuiz"
+              onChangeValue={(value) => {
+                setSelectedQuizId(Number(value));
+                resetQuestionEditor();
+              }}
+              options={quizzes.map((quiz) => ({ value: quiz.id, label: quiz.title }))}
+              placeholder="Select quiz"
+              value={questionQuiz?.id || ""}
+            />
+          </div>
+
+          <div className="list admin-question-list">
+            {questionQuiz?.questions?.map((question, index) => (
+              <div className={`list-item admin-question-item${activeQuestion?.id === question.id ? " active" : ""}`} key={question.id}>
+                <div className="admin-question-index">{index + 1}</div>
+                <div className="admin-question-copy">
+                  <div className="list-title">{question.content}</div>
+                  <div className="muted tiny">{question.points} pts | {question.options?.length || 0} options</div>
+                  <div className="chip-row admin-quiz-chips">
+                    {question.options?.map((option) => (
+                      <span className={`badge${option.correct ? " live" : ""}`} key={option.id}>
+                        {option.correct ? "Correct: " : ""}{option.content}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="admin-question-actions">
+                  <button className="icon-menu-btn" onClick={() => editQuestion(question)} title="Edit question" type="button">
+                    <span className="material-symbols-outlined">edit</span>
+                  </button>
+                  <button className="icon-menu-btn danger-icon" onClick={() => handleQuestionDelete(question.id)} title="Delete question" type="button">
+                    <span className="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+            {questionQuiz && !questionQuiz.questions?.length ? <div className="empty-state">No questions yet.</div> : null}
+            {!questionQuiz ? <div className="empty-state">No quiz selected.</div> : null}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="panel-title-row">
+            <h3 className="panel-title">{questionMode === "edit" ? "Edit Question" : "Add Question"}</h3>
+            <span className="muted tiny">2-6 options, one correct</span>
+          </div>
+          <form className="form-grid" onSubmit={handleQuestionSubmit}>
+            <Field
+              as="textarea"
+              label="Question"
+              name="questionContent"
+              onChange={(event) => setQuestionDraft((current) => ({ ...current, content: event.target.value }))}
+              placeholder="Which keyword is used to inherit a class in Java?"
+              value={questionDraft.content}
+            />
+            <Field
+              label="Points"
+              max="100"
+              min="1"
+              name="questionPoints"
+              onChange={(event) => setQuestionDraft((current) => ({ ...current, points: event.target.value }))}
+              type="number"
+              value={questionDraft.points}
+            />
+
+            <div className="question-option-stack">
+              {questionDraft.options.map((option, index) => (
+                <div className="question-option-row" key={`draft-option-${index}`}>
+                  <label className="question-correct-control" title="Mark correct">
+                    <input
+                      checked={Boolean(option.correct)}
+                      name="correctOption"
+                      onChange={() => updateDraftOption(index, { correct: true })}
+                      type="radio"
+                    />
+                    <span>{String.fromCharCode(65 + index)}</span>
+                  </label>
+                  <input
+                    className="field-input"
+                    onChange={(event) => updateDraftOption(index, { content: event.target.value })}
+                    placeholder={`Option ${String.fromCharCode(65 + index)}`}
+                    required
+                    type="text"
+                    value={option.content}
+                  />
+                  <button
+                    className="icon-menu-btn"
+                    disabled={questionDraft.options.length <= 2}
+                    onClick={() => removeDraftOption(index)}
+                    title="Remove option"
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined">remove</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="helper-row admin-form-actions">
+              <Button className="ghost-btn" disabled={questionDraft.options.length >= 6} onClick={addDraftOption} type="button">
+                Add Option
+              </Button>
+              <Button className="primary-btn" disabled={!questionQuiz || questionSaving} type="submit">
+                {questionSaving ? "Saving..." : questionMode === "edit" ? "Update Question" : "Add Question"}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      </section>
+      </>
       ) : null}
 
       {showAnalyticsSection ? (
