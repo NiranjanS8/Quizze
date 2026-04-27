@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 
 const STORAGE_TOKEN = "quizze_token";
+const STORAGE_REFRESH_TOKEN = "quizze_refresh_token";
 const STORAGE_USER = "quizze_user";
 
 function readStoredUser() {
@@ -190,20 +191,23 @@ function CustomSelect({ label, name, value, onChangeValue, options, placeholder 
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem(STORAGE_TOKEN) || "");
+  const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem(STORAGE_REFRESH_TOKEN) || "");
   const [user, setUser] = useState(() => readStoredUser());
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     function handleStorageChange(event) {
-      if (event.key !== STORAGE_TOKEN && event.key !== STORAGE_USER) {
+      if (event.key !== STORAGE_TOKEN && event.key !== STORAGE_REFRESH_TOKEN && event.key !== STORAGE_USER) {
         return;
       }
 
       const nextToken = localStorage.getItem(STORAGE_TOKEN) || "";
+      const nextRefreshToken = localStorage.getItem(STORAGE_REFRESH_TOKEN) || "";
       const nextUser = readStoredUser();
 
       setToken(nextToken);
+      setRefreshToken(nextRefreshToken);
       setUser(nextUser);
       setMessage("");
       setError("");
@@ -216,6 +220,7 @@ export default function App() {
   const auth = useMemo(
     () => ({
       token,
+      refreshToken,
       user,
       isAuthenticated: Boolean(token && user),
       login(authResponse) {
@@ -227,18 +232,22 @@ export default function App() {
         };
 
         localStorage.setItem(STORAGE_TOKEN, authResponse.accessToken);
+        localStorage.setItem(STORAGE_REFRESH_TOKEN, authResponse.refreshToken || "");
         localStorage.setItem(STORAGE_USER, JSON.stringify(nextUser));
         setToken(authResponse.accessToken);
+        setRefreshToken(authResponse.refreshToken || "");
         setUser(nextUser);
       },
       logout() {
         localStorage.removeItem(STORAGE_TOKEN);
+        localStorage.removeItem(STORAGE_REFRESH_TOKEN);
         localStorage.removeItem(STORAGE_USER);
         setToken("");
+        setRefreshToken("");
         setUser(null);
       },
     }),
-    [token, user],
+    [token, refreshToken, user],
   );
 
   const sharedProps = { auth, message, setMessage, error, setError };
@@ -468,7 +477,13 @@ function ProtectedLayout({ auth, message, setMessage, error, setError }) {
               </Button>
               <Button
                 className="primary-btn"
-                onClick={() => {
+                onClick={async () => {
+                  if (auth.refreshToken) {
+                    await apiRequest("/api/auth/logout", {
+                      method: "POST",
+                      body: JSON.stringify({ refreshToken: auth.refreshToken }),
+                    }).catch(() => null);
+                  }
                   auth.logout();
                   setError("");
                   setMessage("");

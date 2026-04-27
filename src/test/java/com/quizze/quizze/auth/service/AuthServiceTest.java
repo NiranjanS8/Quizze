@@ -8,9 +8,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.quizze.quizze.auth.domain.PasswordResetOtp;
+import com.quizze.quizze.auth.domain.RefreshToken;
 import com.quizze.quizze.auth.dto.AuthResponse;
 import com.quizze.quizze.auth.dto.ForgotPasswordRequest;
 import com.quizze.quizze.auth.dto.RegisterRequest;
+import com.quizze.quizze.auth.dto.RefreshTokenRequest;
 import com.quizze.quizze.auth.dto.ResetPasswordRequest;
 import com.quizze.quizze.auth.event.UserRegisteredEvent;
 import com.quizze.quizze.auth.mapper.AuthMapper;
@@ -67,6 +69,9 @@ class AuthServiceTest {
     @Mock
     private PasswordResetEmailService passwordResetEmailService;
 
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     private AuthService authService;
 
     @BeforeEach
@@ -81,7 +86,8 @@ class AuthServiceTest {
                 new AuthMapper(),
                 applicationEventPublisher,
                 applicationMetricsService,
-                passwordResetEmailService
+                passwordResetEmailService,
+                refreshTokenService
         );
     }
 
@@ -108,10 +114,12 @@ class AuthServiceTest {
             return user;
         });
         when(jwtService.generateToken(10L, "niranjan", "USER")).thenReturn("jwt-token");
+        when(refreshTokenService.create(any(User.class))).thenReturn("refresh-token");
 
         AuthResponse response = authService.register(request);
 
         assertThat(response.getAccessToken()).isEqualTo("jwt-token");
+        assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
         assertThat(response.getUsername()).isEqualTo("niranjan");
         assertThat(response.getRole()).isEqualTo("USER");
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
@@ -120,6 +128,35 @@ class AuthServiceTest {
         ArgumentCaptor<UserRegisteredEvent> eventCaptor = ArgumentCaptor.forClass(UserRegisteredEvent.class);
         verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().user().getId()).isEqualTo(10L);
+    }
+
+    @Test
+    void refreshShouldRotateRefreshTokenAndReturnNewTokens() {
+        Role role = new Role();
+        role.setName(RoleType.USER);
+
+        User user = new User();
+        user.setId(42L);
+        user.setUsername("learner");
+        user.setEmail("learner@example.com");
+        user.setRole(role);
+
+        RefreshToken storedToken = new RefreshToken();
+        storedToken.setUser(user);
+
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken("old-refresh-token");
+
+        when(refreshTokenService.consume("old-refresh-token")).thenReturn(storedToken);
+        when(jwtService.generateToken(42L, "learner", "USER")).thenReturn("new-access-token");
+        when(refreshTokenService.create(user)).thenReturn("new-refresh-token");
+
+        AuthResponse response = authService.refresh(request);
+
+        assertThat(response.getAccessToken()).isEqualTo("new-access-token");
+        assertThat(response.getRefreshToken()).isEqualTo("new-refresh-token");
+        assertThat(response.getUsername()).isEqualTo("learner");
+        verify(refreshTokenService).consume("old-refresh-token");
     }
 
     @Test
@@ -191,5 +228,32 @@ class AuthServiceTest {
 
         assertThat(otp.getFailedAttempts()).isEqualTo(5);
         assertThat(otp.getUsedAt()).isNotNull();
+    }
+
+    @Test
+    void resetPasswordShouldRevokeRefreshTokensAfterSuccessfulReset() {
+        ResetPasswordRequest request = new ResetPasswordRequest();
+        request.setEmail("test@example.com");
+        request.setOtp("123456");
+        request.setNewPassword("NewPassword123");
+
+        User user = new User();
+        user.setId(21L);
+
+        PasswordResetOtp otp = new PasswordResetOtp();
+        otp.setEmail("test@example.com");
+        otp.setUser(user);
+        otp.setOtpHash("stored-hash");
+        otp.setFailedAttempts(0);
+        otp.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+
+        when(passwordResetOtpRepository.findTopByEmailOrderByCreatedAtDesc("test@example.com")).thenReturn(Optional.of(otp));
+        when(passwordEncoder.matches("123456", "stored-hash")).thenReturn(true);
+        when(passwordEncoder.encode("NewPassword123")).thenReturn("new-password-hash");
+
+        String response = authService.resetPassword(request);
+
+        assertThat(response).isEqualTo("Password reset successfully. You can now sign in.");
+        verify(refreshTokenService).revokeAllForUser(21L);
     }
 }

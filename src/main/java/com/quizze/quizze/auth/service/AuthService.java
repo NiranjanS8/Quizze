@@ -4,8 +4,10 @@ import com.quizze.quizze.auth.dto.AuthResponse;
 import com.quizze.quizze.auth.dto.ForgotPasswordRequest;
 import com.quizze.quizze.auth.dto.LoginRequest;
 import com.quizze.quizze.auth.dto.RegisterRequest;
+import com.quizze.quizze.auth.dto.RefreshTokenRequest;
 import com.quizze.quizze.auth.dto.ResetPasswordRequest;
 import com.quizze.quizze.auth.domain.PasswordResetOtp;
+import com.quizze.quizze.auth.domain.RefreshToken;
 import com.quizze.quizze.auth.event.UserRegisteredEvent;
 import com.quizze.quizze.auth.mapper.AuthMapper;
 import com.quizze.quizze.auth.repository.PasswordResetOtpRepository;
@@ -56,6 +58,7 @@ public class AuthService {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final ApplicationMetricsService applicationMetricsService;
     private final PasswordResetEmailService passwordResetEmailService;
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -87,13 +90,15 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
         String token = jwtService.generateToken(savedUser.getId(), savedUser.getUsername(), savedUser.getRole().getName().name());
+        String refreshToken = refreshTokenService.create(savedUser);
         log.info("User registered successfully with userId={} and role={}", savedUser.getId(), savedUser.getRole().getName());
         applicationMetricsService.increment("quizze.auth.register.success");
         applicationEventPublisher.publishEvent(new UserRegisteredEvent(savedUser));
 
-        return authMapper.toAuthResponse(savedUser, token);
+        return authMapper.toAuthResponse(savedUser, token, refreshToken);
     }
 
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         String principalInput = request.getUsernameOrEmail().trim();
         log.info("Authenticating user with principal='{}'", principalInput);
@@ -104,10 +109,29 @@ public class AuthService {
         CustomUserDetails principal = (CustomUserDetails) authentication.getPrincipal();
         User user = principal.getUser();
         String token = jwtService.generateToken(user.getId(), user.getUsername(), user.getRole().getName().name());
+        String refreshToken = refreshTokenService.create(user);
         log.info("User authenticated successfully with userId={} and role={}", user.getId(), user.getRole().getName());
         applicationMetricsService.increment("quizze.auth.login.success");
 
-        return authMapper.toAuthResponse(user, token);
+        return authMapper.toAuthResponse(user, token, refreshToken);
+    }
+
+    @Transactional
+    public AuthResponse refresh(RefreshTokenRequest request) {
+        RefreshToken consumedToken = refreshTokenService.consume(request.getRefreshToken().trim());
+        User user = consumedToken.getUser();
+        String accessToken = jwtService.generateToken(user.getId(), user.getUsername(), user.getRole().getName().name());
+        String refreshToken = refreshTokenService.create(user);
+        applicationMetricsService.increment("quizze.auth.refresh.success");
+
+        return authMapper.toAuthResponse(user, accessToken, refreshToken);
+    }
+
+    @Transactional
+    public String logout(RefreshTokenRequest request) {
+        refreshTokenService.revoke(request.getRefreshToken().trim());
+        applicationMetricsService.increment("quizze.auth.logout.success");
+        return "Logged out successfully";
     }
 
     @Transactional
@@ -161,6 +185,7 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         latestOtp.setUsedAt(LocalDateTime.now());
         invalidateActiveOtps(normalizedEmail);
+        refreshTokenService.revokeAllForUser(user.getId());
 
         log.info("Password reset completed successfully for userId={}", user.getId());
         applicationMetricsService.increment("quizze.auth.password_reset.completed");

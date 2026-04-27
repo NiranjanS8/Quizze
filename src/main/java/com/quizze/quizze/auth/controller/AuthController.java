@@ -4,6 +4,7 @@ import com.quizze.quizze.auth.dto.AuthResponse;
 import com.quizze.quizze.auth.dto.ForgotPasswordRequest;
 import com.quizze.quizze.auth.dto.LoginRequest;
 import com.quizze.quizze.auth.dto.RegisterRequest;
+import com.quizze.quizze.auth.dto.RefreshTokenRequest;
 import com.quizze.quizze.auth.dto.ResetPasswordRequest;
 import com.quizze.quizze.auth.service.AuthRateLimitService;
 import com.quizze.quizze.auth.service.AuthService;
@@ -106,6 +107,30 @@ public class AuthController {
         authRateLimitService.checkLoginLimit(resolveClientIp(httpServletRequest), request.getUsernameOrEmail());
         AuthResponse response = authService.login(request);
         return ResponseEntity.ok(com.quizze.quizze.common.api.ApiResponse.success("Login successful", response));
+    }
+
+    @PostMapping("/refresh")
+    @Operation(
+            summary = "Refresh access token",
+            description = "Rotates a valid refresh token and returns a new access token and refresh token."
+    )
+    public ResponseEntity<ApiResponse<AuthResponse>> refresh(
+            @Valid @RequestBody RefreshTokenRequest request
+    ) {
+        AuthResponse response = authService.refresh(request);
+        return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", response));
+    }
+
+    @PostMapping("/logout")
+    @Operation(
+            summary = "Logout user",
+            description = "Revokes the provided refresh token."
+    )
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @Valid @RequestBody RefreshTokenRequest request
+    ) {
+        String message = authService.logout(request);
+        return ResponseEntity.ok(ApiResponse.success(message));
     }
 
     @PostMapping("/forgot-password")

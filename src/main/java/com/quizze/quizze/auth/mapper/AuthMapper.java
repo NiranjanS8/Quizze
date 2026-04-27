@@ -7,9 +7,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuthMapper {
 
-    public AuthResponse toAuthResponse(User user, String token) {
+    public AuthResponse toAuthResponse(User user, String accessToken, String refreshToken) {
         return AuthResponse.builder()
-                .accessToken(token)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .userId(user.getId())
                 .username(user.getUsername())
