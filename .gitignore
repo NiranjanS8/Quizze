@@ -1,11 +1,14 @@
 # Maven
 target/
 .mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
 
 # Build outputs
 build/
 out/
 dist/
+release/
+debug/
 
 # Logs
 *.log
@@ -34,13 +37,18 @@ Thumbs.db
 *.ear
 hs_err_pid*
 replay_pid*
+.attach_pid*
 
 # Environment and local config
 .env
 .env.*
 !.env.example
+frontend/.env
+frontend/.env.*
 application-local.properties
 application-dev.properties
+application-prod.properties
+*.local
 Online Quiz Platform using Spring Boot.md
 stitch/
 
@@ -49,13 +57,22 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/.cache/
+frontend/coverage/
+frontend/.eslintcache
+*.tsbuildinfo
 
 # Test and coverage artifacts
 coverage/
 .jacoco/
+surefire-reports/
+failsafe-reports/
+test-output/
 
 # Temporary files
 *.tmp
 *.temp
 *.swp
 *~
+
+PROJECT_CONTEXT
+graphify-out/

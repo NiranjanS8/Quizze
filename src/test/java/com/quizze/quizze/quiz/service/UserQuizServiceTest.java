@@ -78,7 +78,7 @@ class UserQuizServiceTest {
 
         User user = user(3L, "learner");
 
-        when(quizRepository.findByIdAndPublishedTrue(12L)).thenReturn(Optional.of(quiz));
+        when(quizRepository.findPublishedByIdForUpdate(12L)).thenReturn(Optional.of(quiz));
         when(userRepository.findById(3L)).thenReturn(Optional.of(user));
         when(quizAttemptRepository.findByUserIdAndQuizId(3L, 12L)).thenReturn(List.of(new QuizAttempt()));
 
@@ -141,6 +141,38 @@ class UserQuizServiceTest {
         assertThat(eventCaptor.getValue().quizId()).isEqualTo(25L);
         assertThat(eventCaptor.getValue().userId()).isEqualTo(7L);
         assertThat(eventCaptor.getValue().attemptId()).isEqualTo(50L);
+    }
+
+    @Test
+    void submitQuizShouldExpireLateAttempt() {
+        Quiz quiz = new Quiz();
+        quiz.setId(30L);
+        quiz.setTitle("Timed Quiz");
+        quiz.setTimeLimitInMinutes(1);
+        Question question = question(201L, "Question", 5, option(2001L, "Answer", true));
+        question.setQuiz(quiz);
+        quiz.getQuestions().add(question);
+
+        QuizAttempt attempt = new QuizAttempt();
+        attempt.setId(60L);
+        attempt.setQuiz(quiz);
+        attempt.setUser(user(8L, "learner"));
+        attempt.setStatus(AttemptStatus.IN_PROGRESS);
+        attempt.setStartedAt(LocalDateTime.now().minusMinutes(5));
+        attempt.setQuestionOrder("201");
+
+        SubmitQuizRequest request = new SubmitQuizRequest();
+        request.setAnswers(List.of(answer(201L, 2001L)));
+
+        when(quizAttemptRepository.findByIdAndUserId(60L, 8L)).thenReturn(Optional.of(attempt));
+
+        assertThatThrownBy(() -> userQuizService.submitQuiz(60L, 8L, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Quiz attempt has expired and can no longer be submitted");
+
+        assertThat(attempt.getStatus()).isEqualTo(AttemptStatus.EXPIRED);
+        assertThat(attempt.getSubmittedAt()).isNotNull();
+        verify(applicationMetricsService).increment("quizze.quiz.attempt.expired");
     }
 
     private User user(Long id, String username) {

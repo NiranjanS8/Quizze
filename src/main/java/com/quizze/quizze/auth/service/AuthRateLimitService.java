@@ -16,6 +16,7 @@ public class AuthRateLimitService {
 
     private final AuthRateLimitProperties properties;
     private final ConcurrentMap<String, WindowCounter> counters = new ConcurrentHashMap<>();
+    private volatile Instant lastCleanupAt = Instant.EPOCH;
 
     public void checkLoginLimit(String clientIp, String usernameOrEmail) {
         if (!properties.isEnabled()) {
@@ -53,7 +54,8 @@ public class AuthRateLimitService {
 
     private void consume(String key, int maxAttempts, long windowSeconds, String message) {
         Instant now = Instant.now();
-        WindowCounter counter = counters.computeIfAbsent(key, ignored -> new WindowCounter(now, 0));
+        cleanupExpiredCounters(now);
+        WindowCounter counter = counters.computeIfAbsent(key, ignored -> new WindowCounter(now, 0, windowSeconds));
 
         synchronized (counter) {
             if (Duration.between(counter.windowStart(), now).getSeconds() >= windowSeconds) {
@@ -68,6 +70,15 @@ public class AuthRateLimitService {
         }
     }
 
+    private void cleanupExpiredCounters(Instant now) {
+        if (Duration.between(lastCleanupAt, now).getSeconds() < 60) {
+            return;
+        }
+
+        lastCleanupAt = now;
+        counters.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+    }
+
     private String normalizeValue(String value) {
         if (value == null || value.isBlank()) {
             return "unknown";
@@ -78,10 +89,12 @@ public class AuthRateLimitService {
     private static final class WindowCounter {
         private Instant windowStart;
         private int attempts;
+        private final long windowSeconds;
 
-        private WindowCounter(Instant windowStart, int attempts) {
+        private WindowCounter(Instant windowStart, int attempts, long windowSeconds) {
             this.windowStart = windowStart;
             this.attempts = attempts;
+            this.windowSeconds = windowSeconds;
         }
 
         private Instant windowStart() {
@@ -99,6 +112,10 @@ public class AuthRateLimitService {
         private void reset(Instant now) {
             this.windowStart = now;
             this.attempts = 0;
+        }
+
+        private boolean isExpired(Instant now) {
+            return Duration.between(windowStart, now).getSeconds() >= windowSeconds;
         }
     }
 }

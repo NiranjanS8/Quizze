@@ -1,8 +1,18 @@
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend ./
+RUN npm run build
+
 FROM maven:3.9.9-eclipse-temurin-17 AS builder
 WORKDIR /app
 
 COPY pom.xml .
 COPY src ./src
+COPY --from=frontend-builder /app/frontend/dist ./src/main/resources/static
 
 RUN mvn -q -DskipTests package
 

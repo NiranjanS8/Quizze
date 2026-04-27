@@ -16,6 +16,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -176,9 +178,22 @@ public class AuthController {
 
     private String resolveClientIp(HttpServletRequest request) {
         String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
+        if (forwardedFor != null && !forwardedFor.isBlank() && isTrustedProxy(request.getRemoteAddr())) {
             return forwardedFor.split(",")[0].trim().toLowerCase(Locale.ROOT);
         }
         return request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr().trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isTrustedProxy(String remoteAddress) {
+        if (remoteAddress == null || remoteAddress.isBlank()) {
+            return false;
+        }
+
+        try {
+            InetAddress address = InetAddress.getByName(remoteAddress);
+            return address.isLoopbackAddress() || address.isSiteLocalAddress();
+        } catch (UnknownHostException ex) {
+            return false;
+        }
     }
 }

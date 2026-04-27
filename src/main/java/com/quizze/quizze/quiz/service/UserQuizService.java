@@ -109,7 +109,7 @@ public class UserQuizService {
     @Transactional
     public StartQuizResponse startQuiz(Long quizId, Long userId) {
         log.info("Starting quiz attempt for userId={} and quizId={}", userId, quizId);
-        Quiz quiz = getPublishedQuiz(quizId);
+        Quiz quiz = getPublishedQuizForAttemptStart(quizId);
         User user = getUser(userId);
 
         if (quiz.getQuestions().isEmpty()) {
@@ -165,6 +165,13 @@ public class UserQuizService {
         }
 
         boolean timeExpired = isTimedOut(attempt);
+        if (timeExpired) {
+            attempt.setStatus(AttemptStatus.EXPIRED);
+            attempt.setSubmittedAt(LocalDateTime.now());
+            applicationMetricsService.increment("quizze.quiz.attempt.expired");
+            throw new BadRequestException("Quiz attempt has expired and can no longer be submitted");
+        }
+
         validateSubmittedAnswers(attempt, request);
 
         attempt.getAnswers().clear();
@@ -336,6 +343,11 @@ public class UserQuizService {
 
     private Quiz getPublishedQuiz(Long quizId) {
         return quizRepository.findByIdAndPublishedTrue(quizId)
+                .orElseThrow(() -> new ResourceNotFoundException("Published quiz not found with id: " + quizId));
+    }
+
+    private Quiz getPublishedQuizForAttemptStart(Long quizId) {
+        return quizRepository.findPublishedByIdForUpdate(quizId)
                 .orElseThrow(() -> new ResourceNotFoundException("Published quiz not found with id: " + quizId));
     }
 

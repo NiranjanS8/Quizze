@@ -8,9 +8,10 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.event.EventListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 @Slf4j
@@ -22,7 +23,7 @@ public class QuizPublishedKafkaProducer {
     private final NewQuizNotificationProperties properties;
     private final ApplicationMetricsService metricsService;
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleQuizPublished(QuizPublishedEvent event) {
         NewQuizPublishedMessage message = new NewQuizPublishedMessage(
                 UUID.randomUUID().toString(),

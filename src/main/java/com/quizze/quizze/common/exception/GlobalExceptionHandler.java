@@ -112,7 +112,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleGenericException(Exception ex) {
         log.error("Unexpected application error", ex);
-        Map<String, String> error = Map.of("error", ex.getMessage() == null ? "Unexpected error" : ex.getMessage());
+        Map<String, String> error = Map.of("error", "Unexpected error");
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.failure("An unexpected error occurred", error));
